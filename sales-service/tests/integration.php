@@ -65,6 +65,8 @@ try {
  [$status]=callApi('/team');check($status===403,'salesperson cannot list team assignment targets');
  [$status]=callApi('/leads/'.$lead.'/assign',['user_id'=>$salesUser,'version'=>3]);check($status===403,'salesperson cannot reassign');
  [$status]=callApi('/leads/'.$imported['rows'][0]['id']);check($status===404,'unassigned lead hidden from salesperson');
+ [$status,$hiddenMatch]=callApi('/leads',['name'=>'Same contact','email'=>$newEmail,'request_key'=>uid()]);
+ check($status===409&&count($hiddenMatch['matches']??[])===1&&!isset($hiddenMatch['matches'][0]['id'])&&!isset($hiddenMatch['matches'][0]['name']),'salesperson duplicate warning hides inaccessible contact');
  $collectorUser=uid();$collectorEmail='collector-'.bin2hex(random_bytes(4)).'@local.test';
  query('INSERT INTO users (id,workspace_id,name,email,password_hash,role) VALUES (?,?,?,?,?,?)',[$collectorUser,$wid,'Collector',$collectorEmail,password_hash($password,PASSWORD_DEFAULT),'collector']);
  $cookie='';[$status,$collectorSession]=callApi('/session');$csrf=$collectorSession['csrf'];callApi('/login',['email'=>$collectorEmail,'password'=>$password]);
