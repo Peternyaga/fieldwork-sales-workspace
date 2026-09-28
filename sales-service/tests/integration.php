@@ -35,6 +35,14 @@ try {
  [$status]=callApi('/leads/'.$lead.'/notes',['note'=>'Reached and asked for Friday call']);check($status===200,'call outcome note');
  [$status,$task]=callApi('/leads/'.$lead.'/tasks',['title'=>'Call Friday','owner'=>'Tester','due_at'=>'2026-10-02T07:00:00.000Z']);check($status===200&&strlen($task['id']??'')===32,'internal task');
  [$status,$history]=callApi('/leads/'.$lead);check($status===200&&count($history['activities'])===4&&count($history['tasks'])===1,'durable history');
+ check($status===200&&count($history['opportunities']??[])===1,'lead detail includes initial opportunity');
+ $offerRequest=uid();[$status,$second]=callApi('/leads/'.$lead.'/opportunities',['offering'=>'Maintenance','request_key'=>$offerRequest]);
+ $secondId=$second['id']??'';check($status===200&&strlen($secondId)===32,'second opportunity for one contact');
+ [$status,$replayed]=callApi('/leads/'.$lead.'/opportunities',['offering'=>'Maintenance','request_key'=>$offerRequest]);check($status===200&&($replayed['replayed']??false)&&$replayed['id']===$secondId,'opportunity creation is idempotent');
+ [$status,$opList]=callApi('/opportunities');check($status===200&&count($opList)===2,'opportunity list includes both offerings');
+ [$status]=callApi('/opportunities/'.$secondId.'/update',['stage'=>'Proposal','version'=>1]);check($status===200,'second opportunity stage changes');
+ [$status]=callApi('/opportunities/'.$secondId.'/update',['stage'=>'Won','version'=>1]);check($status===409,'stale opportunity stage rejected');
+ check(query('SELECT stage FROM leads WHERE workspace_id=? AND id=?',[$wid,$lead])->fetchColumn()==='Contacted','second opportunity does not overwrite initial lead stage');
  [$status]=callApi('/tasks/'.$task['id'].'/complete',[]);check($status===200,'task completion');
  $salesUser=uid();$salesEmail='sales-'.bin2hex(random_bytes(4)).'@local.test';
  query('INSERT INTO users (id,workspace_id,name,email,password_hash,role) VALUES (?,?,?,?,?,?)',[$salesUser,$wid,'Sales Rep',$salesEmail,password_hash($password,PASSWORD_DEFAULT),'salesperson']);
@@ -53,6 +61,7 @@ try {
  $cookie='';[$status,$salesSession]=callApi('/session');$csrf=$salesSession['csrf'];
  [$status]=callApi('/login',['email'=>$salesEmail,'password'=>$password]);check($status===200,'salesperson login');
  [$status,$mine]=callApi('/leads');check($status===200&&count($mine)===1&&$mine[0]['id']===$lead,'salesperson sees assigned lead only');
+ [$status,$mineOpportunities]=callApi('/opportunities');check($status===200&&count($mineOpportunities)===2,'salesperson sees only assigned contact opportunities');
  [$status]=callApi('/team');check($status===403,'salesperson cannot list team assignment targets');
  [$status]=callApi('/leads/'.$lead.'/assign',['user_id'=>$salesUser,'version'=>3]);check($status===403,'salesperson cannot reassign');
  [$status]=callApi('/leads/'.$imported['rows'][0]['id']);check($status===404,'unassigned lead hidden from salesperson');
@@ -63,10 +72,13 @@ try {
  $collected=['name'=>'Collected Example','email'=>'collected-'.bin2hex(random_bytes(4)).'@example.test','request_key'=>uid()];
  [$status,$capture]=callApi('/leads',$collected);check($status===200&&strlen($capture['id']??'')===32,'collector submits a lead');
  [$status,$own]=callApi('/leads/'.$capture['id']);check($status===200&&$own['lead']['collector_user_id']===$collectorUser,'collector can inspect own submission');
+ check(!isset($own['opportunities']),'collector detail excludes sales opportunities');
  check(!array_key_exists('notes',$own['lead'])&&$own['activities']===[]&&$own['tasks']===[],'collector view excludes sales notes and tasks');
  [$status]=callApi('/leads/'.$capture['id'].'/notes',['note'=>'Should be denied']);check($status===403,'collector cannot add private sales note');
  $duplicate=['name'=>'Potential duplicate','email'=>$data['email'],'request_key'=>uid()];[$status,$privateMatch]=callApi('/leads',$duplicate);check($status===409&&count($privateMatch['matches']??[])===1&&!isset($privateMatch['matches'][0]['id'])&&!isset($privateMatch['matches'][0]['name']),'collector duplicate warning hides other lead');
  [$status]=callApi('/tasks');check($status===403,'collector task list denied');
+ [$status]=callApi('/opportunities');check($status===403,'collector opportunity list denied');
+ [$status]=callApi('/leads/'.$capture['id'].'/opportunities',['offering'=>'Private sale','request_key'=>uid()]);check($status===403,'collector cannot create sales opportunity');
  [$status]=callApi('/leads/'.$capture['id'].'/update',['stage'=>'Qualified','version'=>1]);check($status===403,'collector cannot change commercial stage');
  [$status]=callApi('/leads/'.$capture['id'].'/assign',['user_id'=>$salesUser,'version'=>1]);check($status===403,'collector cannot assign');
  query('UPDATE users SET active=0 WHERE id=?',[$collectorUser]);

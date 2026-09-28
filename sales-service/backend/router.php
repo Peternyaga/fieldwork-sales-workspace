@@ -94,6 +94,24 @@ try {
             requireRole(['owner','manager']);
             $out=query("SELECT id,name,role FROM users WHERE workspace_id=? AND active=1 AND role IN ('owner','manager','salesperson') ORDER BY name",[workspace()])->fetchAll();
         }
+        elseif($path==='/api/opportunities'&&$method==='GET') {
+            requireRole(['owner','manager','salesperson']);
+            $scope=in_array(role(),['owner','manager'],true)?'':' AND (l.owner_user_id=? OR l.collector_user_id=?)';
+            $args=in_array(role(),['owner','manager'],true)?[workspace()]:[workspace(),$_SESSION['user_id'],$_SESSION['user_id']];
+            $out=query("SELECT o.id,o.contact_id,o.offering,o.stage,o.version,o.created_at,c.source_lead_id AS lead_id,l.name,l.organisation,l.owner,l.owner_user_id FROM opportunities o JOIN contacts c ON c.id=o.contact_id AND c.workspace_id=o.workspace_id JOIN leads l ON l.id=c.source_lead_id AND l.workspace_id=c.workspace_id WHERE o.workspace_id=?$scope ORDER BY o.updated_at DESC LIMIT 500",$args)->fetchAll();
+        }
+        elseif(preg_match('#^/api/opportunities/([a-f0-9]{32})/update$#',$path,$opMatch)&&$method==='POST') {
+            requireRole(['owner','manager','salesperson']);
+            $op=query('SELECT o.*,c.source_lead_id AS lead_id,l.owner_user_id,l.collector_user_id FROM opportunities o JOIN contacts c ON c.id=o.contact_id AND c.workspace_id=o.workspace_id JOIN leads l ON l.id=c.source_lead_id AND l.workspace_id=c.workspace_id WHERE o.workspace_id=? AND o.id=?',[workspace(),$opMatch[1]])->fetch();
+            if(!$op||!canAccessLead($op))fail('Opportunity not found',404);
+            $stage=textField($data,'stage',30,true);$version=$data['version']??null;
+            if(!in_array($stage,['New','Contacted','Engaged','Qualified','Proposal','Negotiation','Won','Lost'],true)||!is_int($version))fail('Invalid stage or version');
+            db()->beginTransaction();
+            $changed=query('UPDATE opportunities SET stage=?,version=version+1 WHERE workspace_id=? AND id=? AND version=?',[$stage,workspace(),$op['id'],$version]);
+            if(!$changed->rowCount())fail('This opportunity changed. Reload before editing.',409);
+            if($op['source_lead_id']!==null)query('UPDATE leads SET stage=?,version=version+1 WHERE workspace_id=? AND id=?',[$stage,workspace(),$op['lead_id']]);
+            audit($op['lead_id'],'opportunity_updated',['opportunity_id'=>$op['id'],'stage'=>$stage]);db()->commit();$out=['ok'=>true];
+        }
         elseif($path==='/api/leads'&&$method==='GET') {
             $manager=in_array(role(),['owner','manager'],true);$collector=role()==='collector';
             $scope=$manager?'':($collector?' AND l.collector_user_id=?':' AND (l.owner_user_id=? OR l.collector_user_id=?)');
@@ -116,7 +134,7 @@ try {
                 $results[]=['line'=>$row['line'],'status'=>isset($created['matches'])?'duplicate_existing':(isset($created['replayed'])?'already_imported':'imported'),'id'=>$created['id']??null];
             }
             $out=['rows'=>$results];
-        } elseif(preg_match('#^/api/leads/([a-f0-9]{32})(?:/(notes|update|tasks|assign))?$#',$path,$match)) {
+        } elseif(preg_match('#^/api/leads/([a-f0-9]{32})(?:/(notes|update|tasks|assign|opportunities))?$#',$path,$match)) {
             $id=$match[1];$lead=query('SELECT * FROM leads WHERE workspace_id=? AND id=?',[workspace(),$id])->fetch();if(!$lead) fail('Lead not found',404);
             $action=$match[2]??'';
             if($action==='assign')requireRole(['owner','manager']);
@@ -125,7 +143,23 @@ try {
                 if(role()==='collector'){
                     $public=['id','name','organisation','stage','source','offering','owner','owner_user_id','collector','collector_user_id','version','created_at'];
                     $out=['lead'=>array_intersect_key($lead,array_flip($public)),'activities'=>[],'tasks'=>[]];
-                }else $out=['lead'=>$lead,'activities'=>query('SELECT * FROM activities WHERE workspace_id=? AND lead_id=? ORDER BY created_at DESC,id DESC',[workspace(),$id])->fetchAll(),'tasks'=>query('SELECT * FROM tasks WHERE workspace_id=? AND lead_id=? ORDER BY due_at',[workspace(),$id])->fetchAll()];
+                }else $out=['lead'=>$lead,'activities'=>query('SELECT * FROM activities WHERE workspace_id=? AND lead_id=? ORDER BY created_at DESC,id DESC',[workspace(),$id])->fetchAll(),'tasks'=>query('SELECT * FROM tasks WHERE workspace_id=? AND lead_id=? ORDER BY due_at',[workspace(),$id])->fetchAll(),'opportunities'=>query('SELECT o.id,o.offering,o.stage,o.version FROM opportunities o JOIN contacts c ON c.id=o.contact_id AND c.workspace_id=o.workspace_id WHERE o.workspace_id=? AND c.source_lead_id=? ORDER BY o.created_at,o.id',[workspace(),$id])->fetchAll()];
+            }
+            elseif($method==='POST'&&$action==='opportunities') {
+                requireRole(['owner','manager','salesperson']);
+                $offering=textField($data,'offering',150,true);$request=textField($data,'request_key',80,true);
+                db()->beginTransaction();
+                query('SELECT id FROM workspaces WHERE id=? FOR UPDATE',[workspace()]);
+                $prior=query('SELECT o.id,o.offering,c.source_lead_id FROM opportunities o JOIN contacts c ON c.id=o.contact_id AND c.workspace_id=o.workspace_id WHERE o.workspace_id=? AND o.request_key=?',[workspace(),$request])->fetch();
+                if($prior){if($prior['offering']!==$offering||$prior['source_lead_id']!==$id)fail('Request key already used for another opportunity',409);$out=['id'=>$prior['id'],'replayed'=>true];}
+                else {
+                    $contact=query('SELECT id FROM contacts WHERE workspace_id=? AND source_lead_id=?',[workspace(),$id])->fetch();
+                    if(!$contact)fail('Contact record is unavailable',409);
+                    $opportunityId=uid();
+                    query("INSERT INTO opportunities (id,workspace_id,contact_id,offering,stage,request_key) VALUES (?,?,?,?,'New',?)",[$opportunityId,workspace(),$contact['id'],$offering,$request]);
+                    audit($id,'opportunity_created',['opportunity_id'=>$opportunityId,'offering'=>$offering]);$out=['id'=>$opportunityId];
+                }
+                db()->commit();
             }
             elseif($method==='POST'&&$action==='notes') {requireRole(['owner','manager','salesperson']);$note=textField($data,'note',10000,true);audit($id,'note',['text'=>$note]);$out=['ok'=>true];}
             elseif($method==='POST'&&$action==='update') {
@@ -134,7 +168,7 @@ try {
                 if(!in_array($stage,['New','Contacted','Engaged','Qualified','Proposal','Negotiation','Won','Lost'],true)||!is_int($version)) fail('Invalid stage or version');
                 db()->beginTransaction();$s=query('UPDATE leads SET stage=?,version=version+1 WHERE workspace_id=? AND id=? AND version=?',[$stage,workspace(),$id,$version]);
                 if(!$s->rowCount()) fail('This lead changed. Reload before editing.',409);
-                query('UPDATE opportunities SET stage=? WHERE workspace_id=? AND source_lead_id=?',[$stage,workspace(),$id]);
+                query('UPDATE opportunities SET stage=?,version=version+1 WHERE workspace_id=? AND source_lead_id=?',[$stage,workspace(),$id]);
                 audit($id,'updated',['stage'=>$stage]);db()->commit();$out=['ok'=>true];
             } elseif($method==='POST'&&$action==='assign') {
                 $target=textField($data,'user_id',32,true);$version=$data['version']??null;

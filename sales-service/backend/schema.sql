@@ -28,10 +28,11 @@ CREATE TABLE IF NOT EXISTS contacts (
 ) ENGINE=InnoDB;
 CREATE TABLE IF NOT EXISTS opportunities (
  id CHAR(32) PRIMARY KEY, workspace_id CHAR(32) NOT NULL, contact_id CHAR(32) NOT NULL,
- offering VARCHAR(150) NOT NULL, stage VARCHAR(30) NOT NULL DEFAULT 'New',
+ offering VARCHAR(150) NOT NULL, stage VARCHAR(30) NOT NULL DEFAULT 'New', version INT NOT NULL DEFAULT 1, request_key VARCHAR(80) NULL,
  source_lead_id CHAR(32) NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
  UNIQUE KEY tenant_opportunity(workspace_id,id), UNIQUE KEY opportunity_source(workspace_id,source_lead_id),
+ UNIQUE KEY opportunity_request(workspace_id,request_key),
  KEY contact_opportunities(workspace_id,contact_id),
  FOREIGN KEY(workspace_id,contact_id) REFERENCES contacts(workspace_id,id),
  FOREIGN KEY(workspace_id,source_lead_id) REFERENCES leads(workspace_id,id)
