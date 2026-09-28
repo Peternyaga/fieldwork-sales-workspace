@@ -1,7 +1,7 @@
 import {spawn} from 'node:child_process';
 import readline from 'node:readline';
 import path from 'node:path';
-const child=spawn(process.execPath,[path.resolve('../sales-workspace/mcp-server/server.mjs')],{stdio:['pipe','pipe','pipe']});
+const child=spawn(process.execPath,[process.env.FIELDWORK_MCP_SCRIPT||path.resolve('../sales-workspace/mcp-server/server.mjs')],{stdio:['pipe','pipe','pipe']});
 const lines=readline.createInterface({input:child.stdout});
 let seq=0;const pending=new Map();
 lines.on('line',line=>{const msg=JSON.parse(line);const item=pending.get(msg.id);if(item){pending.delete(msg.id);item.resolve(msg);}});

@@ -25,6 +25,8 @@ Separate organisations, contacts, opportunities, campaigns and configurable play
 
 `../sales-workspace` is the source plugin. Its setup skill guides Codex to open the local web app for account creation after the plugin is installed and setup is invoked. Plugin installation itself does not auto-open a browser. After signing in, choose **Connect Codex** in Fieldwork. The service saves a local, revocable 30-day connection token in ignored `var/plugin-access.json`; the plugin reads that file without receiving the user's password. Reconnecting rotates the token, and resetting the account password invalidates it. The stdio MCP bridge uses the token to get a session/CSRF pair and provides lead lookup, capture, assignment, CSV preview/import, notes and task tools. The bridge still accepts the legacy local account file if no connection token exists. The plugin is source-only and is not installed automatically. This single-machine local connection is not hosted authentication; account-specific installation and token storage must be hardened before broad distribution.
 
+When the plugin package is copied outside this repository (as Codex does during installation), set `FIELDWORK_SERVICE_ROOT` to the absolute `sales-service` directory in the MCP server's environment. The bridge needs that path to read the local connection file. A copy in a separate folder passed the protocol lookup with this setting; marketplace installation in the Codex app has not yet been verified.
+
 ## Checks
 
 `npm run build` builds the frontend. `php tests/integration.php` checks a temporary isolated test workspace against MySQL and cleans up only records created by that test. `node tests/plugin-protocol.mjs` checks the local MCP bridge. PHP files can be syntax checked with `php -l`.
