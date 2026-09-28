@@ -18,7 +18,7 @@ Local first; React frontend, PHP backend, MySQL-compatible database. Host later 
 - Codex plugin package scaffolded with a local MCP bridge, assignment tool and sales-workspace skill; official plugin validator passed in the first turn. The package is source-only and not installed in the app marketplace yet.
 - Browser visually inspected login, Today dashboard and lead profile in the first turn. A lead was created through the UI, verified, then that temporary lead and visual QA user were removed. No sample leads remain. Assignment queue and collector layout need a fresh browser review.
 - The Fieldwork source and plugin prototype were pushed to the private GitHub repository `Peternyaga/fieldwork-sales-workspace` on `main`; local credentials, generated files and unrelated projects were excluded.
-- Desktop Intake and Team & access layouts were reviewed in a separate local browser tab. Added horizontally scrollable mobile navigation so six sections remain reachable on narrow screens. `npm run build` passed afterward. No new sample leads were created.
+- Desktop Intake and Team & access layouts were reviewed in a separate local browser tab. Added horizontally scrollable mobile navigation so six sections remain reachable on narrow screens, and restored Sign out there; the previous mobile rule hid it. `npm run build` passed afterward. No new sample leads were created. Narrow-screen visual testing remains open.
 
 ## Next steps
 
