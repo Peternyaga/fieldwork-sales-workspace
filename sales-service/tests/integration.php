@@ -24,10 +24,13 @@ try {
  [$status]=callApi('/login',['email'=>$email,'password'=>$password]);check($status===200,'login');
  $data=['name'=>'Ada Example','organisation'=>'Example Ltd','email'=>'ada+'.bin2hex(random_bytes(3)).'@example.test','phone'=>'+254700000001','source'=>'collector','offering'=>'Installation','owner'=>'Tester','collector'=>'Asha','notes'=>'Requested a call','request_key'=>uid()];
  [$status,$created]=callApi('/leads',$data);$lead=$created['id']??'';check($status===200&&strlen($lead)===32,'lead capture');
+ $records=query('SELECT c.name,c.email,o.name AS organisation,p.offering,p.stage FROM contacts c JOIN organisations o ON o.id=c.organisation_id AND o.workspace_id=c.workspace_id JOIN opportunities p ON p.contact_id=c.id AND p.workspace_id=c.workspace_id WHERE c.workspace_id=? AND c.source_lead_id=?',[$wid,$lead])->fetch();
+ check($records&&$records['name']==='Ada Example'&&$records['organisation']==='Example Ltd'&&$records['offering']==='Installation','lead creates reusable contact, organisation and opportunity');
  [$status,$again]=callApi('/leads',$data);check($status===200&&($again['replayed']??false)&&$again['id']===$lead,'idempotent repeat');
  $data['request_key']=uid();[$status,$match]=callApi('/leads',$data);check($status===409&&count($match['matches']??[])===1,'duplicate warning');
  [$status,$found]=callApi('/leads/'.$lead);check($status===200&&$found['lead']['collector']==='Asha','lead detail and provenance');
  [$status]=callApi('/leads/'.$lead.'/update',['stage'=>'Contacted','owner'=>'Tester','version'=>1]);check($status===200,'stage update');
+ check(query('SELECT stage FROM opportunities WHERE workspace_id=? AND source_lead_id=?',[$wid,$lead])->fetchColumn()==='Contacted','opportunity stage tracks initial lead');
  [$status]=callApi('/leads/'.$lead.'/update',['stage'=>'Qualified','owner'=>'Tester','version'=>1]);check($status===409,'stale edit rejected');
  [$status]=callApi('/leads/'.$lead.'/notes',['note'=>'Reached and asked for Friday call']);check($status===200,'call outcome note');
  [$status,$task]=callApi('/leads/'.$lead.'/tasks',['title'=>'Call Friday','owner'=>'Tester','due_at'=>'2026-10-02T07:00:00.000Z']);check($status===200&&strlen($task['id']??'')===32,'internal task');
@@ -111,12 +114,13 @@ try {
  [$status]=callApi('/plugin/auth',null,['Authorization: Bearer '.$replacementToken]);check($status===200,'new token works after password rotation');
  query('DELETE FROM plugin_tokens WHERE id=?',[$replacementId]);
  $cookie='';[$status]=callApi('/plugin/auth',null,['Authorization: Bearer '.$replacementToken]);check($status===401,'revoked plugin token rejected');
+ query('DELETE FROM opportunities WHERE workspace_id=?',[$other]);query('DELETE FROM contacts WHERE workspace_id=?',[$other]);query('DELETE FROM organisations WHERE workspace_id=?',[$other]);
  query('DELETE FROM leads WHERE id=?',[$otherLead]);
  query('DELETE FROM users WHERE id=?',[$otherUser]);
  query('DELETE FROM workspaces WHERE id=?',[$other]);
 } finally {
  query('DELETE FROM plugin_tokens WHERE workspace_id=?',[$wid]);
  query('DELETE FROM account_tokens WHERE workspace_id=?',[$wid]);
- query('DELETE FROM requests WHERE workspace_id=?',[$wid]);query('DELETE FROM assignment_events WHERE workspace_id=?',[$wid]);query('DELETE FROM activities WHERE workspace_id=?',[$wid]);query('DELETE FROM tasks WHERE workspace_id=?',[$wid]);query('DELETE FROM leads WHERE workspace_id=?',[$wid]);query('DELETE FROM users WHERE workspace_id=?',[$wid]);query('DELETE FROM workspaces WHERE id=?',[$wid]);
+ query('DELETE FROM requests WHERE workspace_id=?',[$wid]);query('DELETE FROM assignment_events WHERE workspace_id=?',[$wid]);query('DELETE FROM activities WHERE workspace_id=?',[$wid]);query('DELETE FROM tasks WHERE workspace_id=?',[$wid]);query('DELETE FROM opportunities WHERE workspace_id=?',[$wid]);query('DELETE FROM contacts WHERE workspace_id=?',[$wid]);query('DELETE FROM organisations WHERE workspace_id=?',[$wid]);query('DELETE FROM leads WHERE workspace_id=?',[$wid]);query('DELETE FROM users WHERE workspace_id=?',[$wid]);query('DELETE FROM workspaces WHERE id=?',[$wid]);
 }
 if($failures){fwrite(STDERR,count($failures)." checks failed\n");exit(1);}echo "All checks passed.\n";

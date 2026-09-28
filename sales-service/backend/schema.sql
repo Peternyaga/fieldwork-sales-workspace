@@ -10,6 +10,32 @@ CREATE TABLE IF NOT EXISTS leads (
  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
  UNIQUE KEY tenant_lead(workspace_id,id), KEY lookup_email(workspace_id,email), KEY lookup_phone(workspace_id,phone), KEY assigned(workspace_id,owner_user_id), KEY submitted(workspace_id,collector_user_id), FOREIGN KEY(workspace_id) REFERENCES workspaces(id)
 ) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS organisations (
+ id CHAR(32) PRIMARY KEY, workspace_id CHAR(32) NOT NULL, name VARCHAR(150) NOT NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ UNIQUE KEY tenant_organisation(workspace_id,id), KEY organisation_name(workspace_id,name),
+ FOREIGN KEY(workspace_id) REFERENCES workspaces(id)
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS contacts (
+ id CHAR(32) PRIMARY KEY, workspace_id CHAR(32) NOT NULL, organisation_id CHAR(32) NULL,
+ name VARCHAR(150) NOT NULL, email VARCHAR(254) NOT NULL DEFAULT '', phone VARCHAR(50) NOT NULL DEFAULT '',
+ source_lead_id CHAR(32) NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ UNIQUE KEY tenant_contact(workspace_id,id), UNIQUE KEY contact_source(workspace_id,source_lead_id),
+ KEY contact_email(workspace_id,email), KEY contact_phone(workspace_id,phone),
+ FOREIGN KEY(workspace_id) REFERENCES workspaces(id),
+ FOREIGN KEY(workspace_id,organisation_id) REFERENCES organisations(workspace_id,id),
+ FOREIGN KEY(workspace_id,source_lead_id) REFERENCES leads(workspace_id,id)
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS opportunities (
+ id CHAR(32) PRIMARY KEY, workspace_id CHAR(32) NOT NULL, contact_id CHAR(32) NOT NULL,
+ offering VARCHAR(150) NOT NULL, stage VARCHAR(30) NOT NULL DEFAULT 'New',
+ source_lead_id CHAR(32) NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ UNIQUE KEY tenant_opportunity(workspace_id,id), UNIQUE KEY opportunity_source(workspace_id,source_lead_id),
+ KEY contact_opportunities(workspace_id,contact_id),
+ FOREIGN KEY(workspace_id,contact_id) REFERENCES contacts(workspace_id,id),
+ FOREIGN KEY(workspace_id,source_lead_id) REFERENCES leads(workspace_id,id)
+) ENGINE=InnoDB;
 CREATE TABLE IF NOT EXISTS activities (id CHAR(32) PRIMARY KEY,workspace_id CHAR(32) NOT NULL,lead_id CHAR(32) NOT NULL,kind VARCHAR(40) NOT NULL,body TEXT NOT NULL,actor VARCHAR(150) NOT NULL,created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,KEY history(workspace_id,lead_id,created_at),FOREIGN KEY(workspace_id,lead_id) REFERENCES leads(workspace_id,id)) ENGINE=InnoDB;
 CREATE TABLE IF NOT EXISTS tasks (id CHAR(32) PRIMARY KEY,workspace_id CHAR(32) NOT NULL,lead_id CHAR(32) NOT NULL,title VARCHAR(250) NOT NULL,owner VARCHAR(150) NOT NULL,due_at DATETIME NOT NULL,status VARCHAR(20) NOT NULL DEFAULT 'pending',created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,KEY due_tasks(workspace_id,status,due_at),FOREIGN KEY(workspace_id,lead_id) REFERENCES leads(workspace_id,id)) ENGINE=InnoDB;
 CREATE TABLE IF NOT EXISTS requests (workspace_id CHAR(32) NOT NULL,request_key VARCHAR(80) NOT NULL,payload_hash CHAR(64) NOT NULL,lead_id CHAR(32) NOT NULL,PRIMARY KEY(workspace_id,request_key)) ENGINE=InnoDB;

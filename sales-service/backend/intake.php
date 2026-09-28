@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__.'/lead-records.php';
 
 function leadValues(array $data): array {
     $values=[];foreach(['name'=>150,'organisation'=>150,'email'=>254,'phone'=>50,'source'=>150,'offering'=>150,'owner'=>150,'collector'=>150,'notes'=>10000] as $key=>$max)$values[$key]=textField($data,$key,$max,$key==='name');
@@ -19,7 +20,7 @@ function createLead(array $values,string $request): array {
         $prior=query('SELECT * FROM requests WHERE workspace_id=? AND request_key=?',[workspace(),$request])->fetch();
         if($prior){if($prior['payload_hash']!==$hash)fail('Request key already used for different data',409);$out=['id'=>$prior['lead_id'],'replayed'=>true];}
         elseif($matches=matchingLeads($values))$out=['error'=>'A matching contact already exists. Review it before adding another.','matches'=>role()==='collector'?array_fill(0,count($matches),['existing'=>true]):$matches];
-        else{$id=uid();$submitterId=$_SESSION['user_id'];query('INSERT INTO leads (id,workspace_id,name,organisation,email,phone,source,offering,owner,collector,notes,collector_user_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',array_merge([$id,workspace()],array_values($values),[$submitterId]));audit($id,'created',['source'=>$values['source']]);query('INSERT INTO requests VALUES (?,?,?,?)',[workspace(),$request,$hash,$id]);$out=['id'=>$id];}
+        else{$id=uid();$submitterId=$_SESSION['user_id'];query('INSERT INTO leads (id,workspace_id,name,organisation,email,phone,source,offering,owner,collector,notes,collector_user_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',array_merge([$id,workspace()],array_values($values),[$submitterId]));materialiseLeadRecords(array_merge(['id'=>$id,'workspace_id'=>workspace(),'stage'=>'New'],$values));audit($id,'created',['source'=>$values['source']]);query('INSERT INTO requests VALUES (?,?,?,?)',[workspace(),$request,$hash,$id]);$out=['id'=>$id];}
         db()->commit();return $out;
     }catch(Throwable $e){if(db()->inTransaction())db()->rollBack();throw $e;}
 }

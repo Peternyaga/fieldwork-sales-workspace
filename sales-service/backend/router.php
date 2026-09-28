@@ -134,6 +134,7 @@ try {
                 if(!in_array($stage,['New','Contacted','Engaged','Qualified','Proposal','Negotiation','Won','Lost'],true)||!is_int($version)) fail('Invalid stage or version');
                 db()->beginTransaction();$s=query('UPDATE leads SET stage=?,version=version+1 WHERE workspace_id=? AND id=? AND version=?',[$stage,workspace(),$id,$version]);
                 if(!$s->rowCount()) fail('This lead changed. Reload before editing.',409);
+                query('UPDATE opportunities SET stage=? WHERE workspace_id=? AND source_lead_id=?',[$stage,workspace(),$id]);
                 audit($id,'updated',['stage'=>$stage]);db()->commit();$out=['ok'=>true];
             } elseif($method==='POST'&&$action==='assign') {
                 $target=textField($data,'user_id',32,true);$version=$data['version']??null;

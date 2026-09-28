@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__.'/lead-records.php';
 function applySchema(): void {
     foreach(explode(';',file_get_contents(__DIR__.'/schema.sql')) as $sql)if(trim($sql))db()->exec($sql);
     $database=db()->query('SELECT DATABASE()')->fetchColumn();
@@ -21,5 +22,13 @@ function applySchema(): void {
     ] as [$table,$index,$columns]){
         $found=query('SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND INDEX_NAME=?',[$database,$table,$index])->fetchColumn();
         if(!$found)db()->exec("CREATE INDEX `$index` ON `$table` ($columns)");
+    }
+    // Existing lead rows are retained. Each receives a contact and, when an
+    // offering is known, an opportunity without changing the legacy API yet.
+    $legacy=query('SELECT l.* FROM leads l LEFT JOIN contacts c ON c.workspace_id=l.workspace_id AND c.source_lead_id=l.id WHERE c.id IS NULL')->fetchAll();
+    foreach($legacy as $lead){
+        db()->beginTransaction();
+        try{materialiseLeadRecords($lead);db()->commit();}
+        catch(Throwable $error){db()->rollBack();throw $error;}
     }
 }
