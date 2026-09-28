@@ -23,7 +23,7 @@ Separate organisations, contacts, opportunities, campaigns and configurable play
 
 ## Codex connection
 
-`../sales-workspace` is the source plugin. Its setup skill guides Codex to open the local web app for account creation after the plugin is installed and setup is invoked. Plugin installation itself does not auto-open a browser. Its stdio MCP bridge calls this API using the legacy local account file and a session/CSRF flow. It provides lead lookup, capture, assignment, CSV preview/import, notes and task tools. It is not installed automatically. Browser-created owner accounts still need a plugin pairing flow; scoped member tokens and hosted authentication are required before broad distribution.
+`../sales-workspace` is the source plugin. Its setup skill guides Codex to open the local web app for account creation after the plugin is installed and setup is invoked. Plugin installation itself does not auto-open a browser. After signing in, choose **Connect Codex** in Fieldwork. The service saves a local, revocable 30-day connection token in ignored `var/plugin-access.json`; the plugin reads that file without receiving the user's password. Reconnecting rotates the token, and resetting the account password invalidates it. The stdio MCP bridge uses the token to get a session/CSRF pair and provides lead lookup, capture, assignment, CSV preview/import, notes and task tools. The bridge still accepts the legacy local account file if no connection token exists. The plugin is source-only and is not installed automatically. This single-machine local connection is not hosted authentication; account-specific installation and token storage must be hardened before broad distribution.
 
 ## Checks
 

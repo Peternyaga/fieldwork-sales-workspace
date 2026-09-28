@@ -8,9 +8,9 @@ query('INSERT INTO workspaces (id,name) VALUES (?,?)',[$wid,'Integration test'])
 query('INSERT INTO users (id,workspace_id,name,email,password_hash) VALUES (?,?,?,?,?)',[$uid,$wid,'Tester',$email,password_hash($password,PASSWORD_DEFAULT)]);
 $cookie='';$csrf='';$lead='';$failures=[];
 function check(bool $ok,string $label): void {global $failures;echo ($ok?'PASS ':'FAIL ').$label."\n";if(!$ok)$failures[]=$label;}
-function callApi(string $route,?array $body=null): array {
+function callApi(string $route,?array $body=null,array $extraHeaders=[]): array {
  global $base,$cookie,$csrf;
- $h=curl_init($base.$route);$headers=['Accept: application/json'];
+ $h=curl_init($base.$route);$headers=array_merge(['Accept: application/json'],$extraHeaders);
  if($cookie)$headers[]='Cookie: '.$cookie;
  if($body!==null){curl_setopt($h,CURLOPT_POST,true);curl_setopt($h,CURLOPT_POSTFIELDS,json_encode($body));$headers[]='Content-Type: application/json';$headers[]='X-CSRF-Token: '.$csrf;}
  curl_setopt_array($h,[CURLOPT_HTTPHEADER=>$headers,CURLOPT_RETURNTRANSFER=>true,CURLOPT_HEADER=>true,CURLOPT_TIMEOUT=>10]);
@@ -95,10 +95,27 @@ try {
  [$status,$revoked]=callApi('/session');check($status===200&&$revoked['user']===null,'password reset revokes earlier session');
  [$status]=callApi('/login',['email'=>$inviteEmail,'password'=>$memberPassword]);check($status===401,'old password is rejected');
  [$status]=callApi('/login',['email'=>$inviteEmail,'password'=>$replacement]);check($status===200,'recovered password signs in');
+ $pluginToken=bin2hex(random_bytes(32));$pluginId=uid();
+ query('INSERT INTO plugin_tokens (id,workspace_id,user_id,token_hash,auth_version,expires_at) VALUES (?,?,?,?,?,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 1 DAY))',[$pluginId,$wid,$uid,hash('sha256',$pluginToken),1]);
+ $cookie='';[$status]=callApi('/plugin/auth');check($status===401,'plugin sign-in requires token');
+ [$status,$pluginAuth]=callApi('/plugin/auth',null,['Authorization: Bearer '.$pluginToken]);check($status===200&&$pluginAuth['role']==='owner'&&strlen($pluginAuth['csrf']??'')>20,'valid plugin token signs in');
+ [$status,$pluginLeads]=callApi('/leads');check($status===200&&count($pluginLeads)>=1,'plugin session reads its workspace');
+ query('UPDATE plugin_tokens SET expires_at=DATE_SUB(UTC_TIMESTAMP(),INTERVAL 1 MINUTE) WHERE id=?',[$pluginId]);
+ $cookie='';[$status]=callApi('/plugin/auth',null,['Authorization: Bearer '.$pluginToken]);check($status===401,'expired plugin token rejected');
+ query('UPDATE plugin_tokens SET expires_at=DATE_ADD(UTC_TIMESTAMP(),INTERVAL 1 DAY) WHERE id=?',[$pluginId]);
+ query('UPDATE users SET auth_version=auth_version+1 WHERE id=?',[$uid]);
+ [$status]=callApi('/plugin/auth',null,['Authorization: Bearer '.$pluginToken]);check($status===401,'password rotation invalidates plugin token');
+ query('DELETE FROM plugin_tokens WHERE id=?',[$pluginId]);
+ $replacementToken=bin2hex(random_bytes(32));$replacementId=uid();
+ query('INSERT INTO plugin_tokens (id,workspace_id,user_id,token_hash,auth_version,expires_at) VALUES (?,?,?,?,?,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 1 DAY))',[$replacementId,$wid,$uid,hash('sha256',$replacementToken),2]);
+ [$status]=callApi('/plugin/auth',null,['Authorization: Bearer '.$replacementToken]);check($status===200,'new token works after password rotation');
+ query('DELETE FROM plugin_tokens WHERE id=?',[$replacementId]);
+ $cookie='';[$status]=callApi('/plugin/auth',null,['Authorization: Bearer '.$replacementToken]);check($status===401,'revoked plugin token rejected');
  query('DELETE FROM leads WHERE id=?',[$otherLead]);
  query('DELETE FROM users WHERE id=?',[$otherUser]);
  query('DELETE FROM workspaces WHERE id=?',[$other]);
 } finally {
+ query('DELETE FROM plugin_tokens WHERE workspace_id=?',[$wid]);
  query('DELETE FROM account_tokens WHERE workspace_id=?',[$wid]);
  query('DELETE FROM requests WHERE workspace_id=?',[$wid]);query('DELETE FROM assignment_events WHERE workspace_id=?',[$wid]);query('DELETE FROM activities WHERE workspace_id=?',[$wid]);query('DELETE FROM tasks WHERE workspace_id=?',[$wid]);query('DELETE FROM leads WHERE workspace_id=?',[$wid]);query('DELETE FROM users WHERE workspace_id=?',[$wid]);query('DELETE FROM workspaces WHERE id=?',[$wid]);
 }

@@ -5,6 +5,7 @@ if(!str_starts_with($path,'/api/')) {http_response_code(404);exit;}
 require __DIR__.'/bootstrap.php';
 require __DIR__.'/intake.php';
 require __DIR__.'/accounts.php';
+require __DIR__.'/plugin.php';
 $sessionDir=dirname(__DIR__).'/var/sessions';
 if(!is_dir($sessionDir)) mkdir($sessionDir,0700,true);
 session_save_path($sessionDir);
@@ -46,6 +47,8 @@ try {
         db()->commit();
         session_regenerate_id(true);$_SESSION['user_id']=$userId;$_SESSION['user_name']=$name;$_SESSION['workspace_id']=$workspaceId;$_SESSION['user_role']='owner';$_SESSION['auth_version']=1;
         $out=['ok'=>true];
+    } elseif($path==='/api/plugin/auth'&&$method==='GET') {
+        $out=authenticateLocalPlugin();
     } elseif($path==='/api/session'&&$method==='GET') {
         $out=['csrf'=>$_SESSION['csrf'],'user'=>isset($_SESSION['user_id'])?['id'=>$_SESSION['user_id'],'name'=>$_SESSION['user_name'],'role'=>role(),'workspace'=>query('SELECT name FROM workspaces WHERE id=?',[workspace()])->fetchColumn()]:null];
     } elseif($path==='/api/account/token-info'&&$method==='POST') {
@@ -63,6 +66,7 @@ try {
     } else {
         if(!isset($_SESSION['user_id'])) fail('Sign in to continue',401);
         if($path==='/api/logout'&&$method==='POST') {$_SESSION=[];session_destroy();$out=['ok'=>true];}
+        elseif($path==='/api/plugin/connect'&&$method==='POST') {$out=connectLocalPlugin();}
         elseif($path==='/api/team/members'&&$method==='GET') {
             requireRole(['owner']);
             $out=query('SELECT id,name,email,role,active,setup_pending FROM users WHERE workspace_id=? ORDER BY name',[workspace()])->fetchAll();

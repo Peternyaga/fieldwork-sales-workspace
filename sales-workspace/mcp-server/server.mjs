@@ -3,10 +3,12 @@ import fs from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../../sales-service');
-const base='http://127.0.0.1:8788/api';
+const base=process.env.FIELDWORK_API_BASE||'http://127.0.0.1:8788/api';
+const accessName=process.env.FIELDWORK_PLUGIN_ACCESS_FILE||'plugin-access.json';
+if(!/^https?:\/\/127\.0\.0\.1:\d+\/api$/.test(base)||!/^[a-z0-9-]+\.json$/.test(accessName))throw new Error('Invalid local plugin configuration');
 let cookie='',csrf='';
-async function request(route,body){const response=await fetch(base+route,{method:body?'POST':'GET',headers:{Cookie:cookie,...(body?{'Content-Type':'application/json','X-CSRF-Token':csrf}:{})},body:body?JSON.stringify(body):undefined});for(const value of response.headers.getSetCookie())cookie=value.split(';')[0];const result=await response.json();if(!response.ok)throw new Error(result.error||'Service request failed');return result;}
-async function connect(){if(cookie)return;const s=await request('/session');csrf=s.csrf;const account=JSON.parse(await fs.readFile(path.join(root,'var/local-account.json'),'utf8'));await request('/login',account);}
+async function request(route,body,extraHeaders={}){const response=await fetch(base+route,{method:body?'POST':'GET',headers:{Cookie:cookie,...extraHeaders,...(body?{'Content-Type':'application/json','X-CSRF-Token':csrf}:{})},body:body?JSON.stringify(body):undefined});for(const value of response.headers.getSetCookie())cookie=value.split(';')[0];const result=await response.json();if(!response.ok)throw new Error(result.error||'Service request failed');return result;}
+async function connect(){if(cookie)return;let access;try{access=JSON.parse(await fs.readFile(path.join(root,'var',accessName),'utf8'))}catch(e){if(e.code!=='ENOENT')throw new Error('Local plugin connection is invalid. Reconnect from Fieldwork.')}if(access){if(!/^[a-f0-9]{64}$/.test(access.token))throw new Error('Local plugin connection is invalid. Reconnect from Fieldwork.');csrf=(await request('/plugin/auth',undefined,{Authorization:'Bearer '+access.token})).csrf;return}const s=await request('/session');csrf=s.csrf;let account;try{account=JSON.parse(await fs.readFile(path.join(root,'var/local-account.json'),'utf8'))}catch{throw new Error('Connect Codex from Fieldwork before using this plugin.')}await request('/login',account);}
 const string={type:'string'};
 const tools=[
  ['list_leads','Find leads in the connected local workspace. No external research.',{},[]],
