@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "sales-workspace": {
+      "command": "node",
+      "args": ["./mcp-server/server.mjs"]
+    }
+  }
+}
