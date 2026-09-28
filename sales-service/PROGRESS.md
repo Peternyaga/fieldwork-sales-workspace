@@ -17,10 +17,12 @@ Local first; React frontend, PHP backend, MySQL-compatible database. Host later 
 - Account integration checks pass for invitation redemption, replay rejection, password recovery and session revocation. The local frontend build and direct plugin protocol check pass after these changes.
 - Codex plugin package scaffolded with a local MCP bridge, assignment tool and sales-workspace skill; official plugin validator passed in the first turn. The package is source-only and not installed in the app marketplace yet.
 - Browser visually inspected login, Today dashboard and lead profile in the first turn. A lead was created through the UI, verified, then that temporary lead and visual QA user were removed. No sample leads remain. Assignment queue and collector layout need a fresh browser review.
+- The Fieldwork source and plugin prototype were pushed to the private GitHub repository `Peternyaga/fieldwork-sales-workspace` on `main`; local credentials, generated files and unrelated projects were excluded.
+- Desktop Intake and Team & access layouts were reviewed in a separate local browser tab. Added horizontally scrollable mobile navigation so six sections remain reachable on narrow screens. `npm run build` passed afterward. No new sample leads were created.
 
 ## Next steps
 
-1. Browser-review assignment and collector layouts at desktop and mobile widths, plus the first-run and recovery screens on a disposable database. Then separate contact/organisation/opportunity records and configurable playbooks; the current lead row is an initial vertical slice.
+1. Browser-review populated assignment and collector layouts at desktop and mobile widths, plus the first-run and recovery screens on a disposable database. The empty Intake and owner Team screens have been reviewed at desktop width. Then separate contact/organisation/opportunity records and configurable playbooks; the current lead row is an initial vertical slice.
 2. Pair the plugin with browser-created accounts using scoped, revocable credentials and harden deployment configuration. The current local plugin still uses the legacy owner credentials file; do not treat it as hosted-ready.
 3. Implement mailbox connection, authorised message revisions, reply sync, cron-compatible scheduling, desktop helper pairing and reminder sync. Do not claim these are connected yet.
 4. Install the Codex plugin through the supported local plugin workflow after the service API and authentication are mature; test tool calls from an actual Codex chat.
