@@ -20,13 +20,14 @@ Local first; React frontend, PHP backend, MySQL-compatible database. Host later 
 - The Fieldwork source and plugin prototype were pushed to the private GitHub repository `Peternyaga/fieldwork-sales-workspace` on `main`; local credentials, generated files and unrelated projects were excluded.
 - Desktop Intake and Team & access layouts were reviewed in a separate local browser tab. Added horizontally scrollable mobile navigation so six sections remain reachable on narrow screens, and restored Sign out there; the previous mobile rule hid it. `npm run build` passed afterward. No new sample leads were created. Narrow-screen visual testing remains open.
 - Local Codex pairing now supports browser-created owners and members. A signed-in user selects **Connect Codex**; the loopback API stores a hashed, 30-day, account-bound token and writes an ignored local token file for the MCP bridge. Reconnection rotates the token; account password reset, expiration, or token removal blocks new plugin sessions. No password is copied into chat or the plugin file.
+- The **Connect Codex** control was visually checked in a separate, hidden browser tab and is present in the signed-in desktop sidebar. It was not clicked, so the user's account remains unpaired.
 - Pairing was verified on a separate loopback server and disposable account: connection file creation, token rotation, old-token rejection, new-token authentication, and an MCP lead lookup all passed. The test-only file and account were removed without replacing the user's connection file. The main integration suite also passed valid, expired, revoked, and password-reset-invalidated token cases. PHP syntax, frontend build, MCP protocol, and official plugin validation passed.
 
 ## In progress at the latest checkpoint
 
-- The pairing change is implemented and tested but remains uncommitted until the staged file audit and private GitHub push. The active laptop database has the new table, but the user's account has not been paired; the ignored user connection file was not created or overwritten. The browser button was not clicked in the user's session.
+- The pairing change is implemented, tested, and pushed to the private GitHub repository. The active laptop database has the new table, but the user's account has not been paired; the ignored user connection file was not created or overwritten. The browser button was not clicked in the user's session.
 - The user asked how others will get the plugin. Official plugin guidance supports private repo/personal marketplaces for a pilot and a reviewed public directory submission later. No marketplace entry or public publication has been created. The repo remains private.
-- Next, audit and push this pairing change, then test its presentation in the browser and install the source plugin through a supported local workflow. The plugin still has a legacy credential-file fallback, and the local token file is single-machine state. Design multi-user and hosted connection management before broader distribution.
+- Next, install the source plugin through a supported local workflow and test a live read-only tool call in Codex. The plugin still has a legacy credential-file fallback, and the local token file is single-machine state. Design multi-user and hosted connection management before broader distribution.
 
 ## Next steps
 
