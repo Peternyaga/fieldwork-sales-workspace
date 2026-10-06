@@ -1,5 +1,13 @@
 # Implementation progress
 
+## Latest checkpoint — 6 October 2026
+
+- The owner's local workspace contains ten previously collected website-development leads. Their records had no logged call outcomes, so they remain uncalled in the app. All ten are now assigned to the owner account and grouped in **Website development**; **General** is empty. The collected person names are unconfirmed placeholders, and several phone numbers are missing. Do not represent these as verified contacts.
+- Existing internal call tasks were rescheduled for Wednesday, 7 October 2026, from 09:00 through 12:00 Africa/Nairobi in 20-minute slots. Existing preparation tasks moved to 15 minutes before each call, and existing follow-up tasks to corresponding slots on 8 October. No duplicate tasks were created, no calls were placed, and these tasks do not ring audible alarms. A mistakenly completed preparation task during UI verification was immediately restored to pending with a correction audit entry; there are 30 pending tasks again.
+- Projects now have a workspace-scoped table and repeatable migration. New capture and CSV intake use the selected project; duplicate matching stays within that project. Lead, task and opportunity lists are project-filtered. Owners/managers can create projects and move leads with version and duplicate checks. Projects organize data within a workspace; they are not separate permission boundaries.
+- The React sidebar has a project selector/creator and lead-profile move control. The MCP bridge now offers project listing, creation, project-scoped lookups and intake, and a lead-move tool. The skill and README describe the project workflow.
+- Verified the populated local browser UI: **Website development** showed ten leads and 30 open tasks, **General** showed no leads or tasks, and the 7 October call times rendered correctly. PHP migration was rerun, the full integration suite passed, `npm run build` passed, and the MCP protocol test passed authenticated project and lead lookups.
+
 ## Scope and authorisation
 
 Local first; React frontend, PHP backend, MySQL-compatible database. Host later on the user's PHP/MySQL hosting using cron workers. General multi-offering sales product, not school-specific. User authorised implementation and requested an elegant interface and Codex plugin. No external outreach or deployment authorised. Recurring same-thread continuation `continue-sales-service-implementation` runs hourly at minute 36. It cannot guarantee resumption after quota exhaustion.

@@ -3,11 +3,11 @@ import './lead-capture.css';
 
 const fields=[['Name','name',true],['Organisation','organisation'],['Email','email'],['Phone · include country code','phone'],['Product or service','offering'],['Lead source','source'],['Collected by','collector'],['Suggested owner','owner']];
 
-export function LeadCapture({api,onClose,onCreated,onOpen}){
+export function LeadCapture({api,projectId,onClose,onCreated,onOpen}){
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[matches,setMatches]=useState([]),[requestKey]=useState(()=>crypto.randomUUID());
  async function submit(event){
   event.preventDefault();setBusy(true);setError('');setMatches([]);
-  try{const data=Object.fromEntries(new FormData(event.currentTarget));await api('/leads',{...data,request_key:requestKey});await onCreated();onClose()}
+  try{const data=Object.fromEntries(new FormData(event.currentTarget));await api('/leads',{...data,project_id:projectId,request_key:requestKey});await onCreated();onClose()}
   catch(cause){setError(cause.message);if(cause.matches)setMatches(cause.matches)}
   finally{setBusy(false)}
  }

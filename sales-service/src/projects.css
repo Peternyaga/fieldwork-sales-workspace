@@ -1,0 +1,7 @@
+.project-switch{margin:0 2px 22px;padding:14px;background:#f5f8f3;border:1px solid #e1e9dd;border-radius:11px}
+.project-switch-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}.project-switch-heading span{font-size:9px;letter-spacing:1.5px;font-weight:700;color:#859487}
+.project-switch-heading button{background:transparent;color:#507260;padding:0 4px;font-size:20px;line-height:1}.project-switch-heading button:hover{background:#e5eee3}
+.project-switch select,.project-switch input{width:100%;min-width:0;background:white;border:1px solid #d9e3d8;border-radius:7px;padding:9px;color:#31513d;font-size:12px}
+.project-switch form{display:grid;gap:8px;margin-top:10px}.project-switch form button{padding:8px}.project-switch .error{margin:8px 0 0}
+@media(max-width:700px){.project-switch{margin:14px 0 0;max-width:360px}}
+.project-move{display:flex;gap:10px;align-items:end;padding:14px 0;border-bottom:1px solid #e1e8dd}.project-move .field{flex:1;margin:0}.project-move button{height:41px}

@@ -3,6 +3,7 @@ declare(strict_types=1);
 $path=parse_url($_SERVER['REQUEST_URI'],PHP_URL_PATH);
 if(!str_starts_with($path,'/api/')) {http_response_code(404);exit;}
 require __DIR__.'/bootstrap.php';
+require __DIR__.'/projects.php';
 require __DIR__.'/intake.php';
 require __DIR__.'/accounts.php';
 require __DIR__.'/plugin.php';
@@ -94,10 +95,21 @@ try {
             requireRole(['owner','manager']);
             $out=query("SELECT id,name,role FROM users WHERE workspace_id=? AND active=1 AND role IN ('owner','manager','salesperson') ORDER BY name",[workspace()])->fetchAll();
         }
+        elseif($path==='/api/projects'&&$method==='GET') {
+            defaultProject(workspace());
+            $out=query('SELECT id,name,created_at FROM projects WHERE workspace_id=? ORDER BY CASE WHEN name=? THEN 1 ELSE 0 END,name',[workspace(),'General'])->fetchAll();
+        }
+        elseif($path==='/api/projects'&&$method==='POST') {
+            requireRole(['owner','manager']);
+            $name=textField($data,'name',150,true);
+            if(query('SELECT id FROM projects WHERE workspace_id=? AND name=?',[workspace(),$name])->fetch())fail('A project with this name already exists',409);
+            $id=uid();query('INSERT INTO projects (id,workspace_id,name) VALUES (?,?,?)',[$id,workspace(),$name]);$out=['id'=>$id,'name'=>$name];
+        }
         elseif($path==='/api/opportunities'&&$method==='GET') {
             requireRole(['owner','manager','salesperson']);
             $scope=in_array(role(),['owner','manager'],true)?'':' AND (l.owner_user_id=? OR l.collector_user_id=?)';
             $args=in_array(role(),['owner','manager'],true)?[workspace()]:[workspace(),$_SESSION['user_id'],$_SESSION['user_id']];
+            if($project=requestedProject()){$scope.=' AND l.project_id=?';$args[]=$project;}
             $out=query("SELECT o.id,o.contact_id,o.offering,o.stage,o.version,o.created_at,c.source_lead_id AS lead_id,l.name,l.organisation,l.owner,l.owner_user_id FROM opportunities o JOIN contacts c ON c.id=o.contact_id AND c.workspace_id=o.workspace_id JOIN leads l ON l.id=c.source_lead_id AND l.workspace_id=c.workspace_id WHERE o.workspace_id=?$scope ORDER BY o.updated_at DESC LIMIT 500",$args)->fetchAll();
         }
         elseif(preg_match('#^/api/opportunities/([a-f0-9]{32})/update$#',$path,$opMatch)&&$method==='POST') {
@@ -116,34 +128,50 @@ try {
             $manager=in_array(role(),['owner','manager'],true);$collector=role()==='collector';
             $scope=$manager?'':($collector?' AND l.collector_user_id=?':' AND (l.owner_user_id=? OR l.collector_user_id=?)');
             $args=$manager?[workspace()]:($collector?[workspace(),$_SESSION['user_id']]:[workspace(),$_SESSION['user_id'],$_SESSION['user_id']]);
+            if($project=requestedProject()){$scope.=' AND l.project_id=?';$args[]=$project;}
             $fields=$collector?'l.id,l.name,l.organisation,l.stage,l.source,l.offering,l.owner,l.owner_user_id,l.collector,l.collector_user_id,l.version,l.created_at':'l.*';
             $next=$collector?'NULL':"(SELECT MIN(due_at) FROM tasks t WHERE t.workspace_id=l.workspace_id AND t.lead_id=l.id AND t.status='pending')";
             $out=query("SELECT $fields, $next AS next_due FROM leads l WHERE l.workspace_id=?$scope ORDER BY l.updated_at DESC LIMIT 500",$args)->fetchAll();
         } elseif($path==='/api/leads'&&$method==='POST') {
-            $out=createLead(leadValues($data),textField($data,'request_key',80,true));
+            $project=resolveProject(isset($data['project_id'])?textField($data,'project_id',32,true):null,workspace());
+            $out=createLead(leadValues($data),textField($data,'request_key',80,true),$project);
             if(isset($out['matches']))http_response_code(409);
         } elseif($path==='/api/import/preview'&&$method==='POST') {
-            $out=['rows'=>csvRows(textField($data,'csv',900000,true))];
+            $project=resolveProject(isset($data['project_id'])?textField($data,'project_id',32,true):null,workspace());
+            $out=['rows'=>csvRows(textField($data,'csv',900000,true),$project)];
         } elseif($path==='/api/import/commit'&&$method==='POST') {
+            $project=resolveProject(isset($data['project_id'])?textField($data,'project_id',32,true):null,workspace());
             $csv=textField($data,'csv',900000,true);$batch=textField($data,'batch_key',40,true);
             if(!preg_match('/^[a-f0-9-]{36}$/',$batch))fail('Invalid batch key');
-            $rows=csvRows($csv);$results=[];
+            $rows=csvRows($csv,$project);$results=[];
             foreach($rows as $row){
                 if($row['status']!=='ready'){$results[]=['line'=>$row['line'],'status'=>$row['status'],'reason'=>$row['reason']];continue;}
-                $created=createLead($row['values'],hash('sha256',$batch.':'.$row['line']));
+                $created=createLead($row['values'],hash('sha256',$batch.':'.$row['line']),$project);
                 $results[]=['line'=>$row['line'],'status'=>isset($created['matches'])?'duplicate_existing':(isset($created['replayed'])?'already_imported':'imported'),'id'=>$created['id']??null];
             }
             $out=['rows'=>$results];
-        } elseif(preg_match('#^/api/leads/([a-f0-9]{32})(?:/(notes|update|tasks|assign|opportunities))?$#',$path,$match)) {
+        } elseif(preg_match('#^/api/leads/([a-f0-9]{32})(?:/(notes|update|tasks|assign|project|opportunities))?$#',$path,$match)) {
             $id=$match[1];$lead=query('SELECT * FROM leads WHERE workspace_id=? AND id=?',[workspace(),$id])->fetch();if(!$lead) fail('Lead not found',404);
             $action=$match[2]??'';
-            if($action==='assign')requireRole(['owner','manager']);
+            if(in_array($action,['assign','project'],true))requireRole(['owner','manager']);
             elseif(!canAccessLead($lead))fail('Lead not found',404);
             if($method==='GET'&&$action==='') {
                 if(role()==='collector'){
                     $public=['id','name','organisation','stage','source','offering','owner','owner_user_id','collector','collector_user_id','version','created_at'];
                     $out=['lead'=>array_intersect_key($lead,array_flip($public)),'activities'=>[],'tasks'=>[]];
                 }else $out=['lead'=>$lead,'activities'=>query('SELECT * FROM activities WHERE workspace_id=? AND lead_id=? ORDER BY created_at DESC,id DESC',[workspace(),$id])->fetchAll(),'tasks'=>query('SELECT * FROM tasks WHERE workspace_id=? AND lead_id=? ORDER BY due_at',[workspace(),$id])->fetchAll(),'opportunities'=>query('SELECT o.id,o.offering,o.stage,o.version FROM opportunities o JOIN contacts c ON c.id=o.contact_id AND c.workspace_id=o.workspace_id WHERE o.workspace_id=? AND c.source_lead_id=? ORDER BY o.created_at,o.id',[workspace(),$id])->fetchAll()];
+            }
+            elseif($method==='POST'&&$action==='project') {
+                $projectId=resolveProject(textField($data,'project_id',32,true),workspace());$version=$data['version']??null;
+                if(!is_int($version))fail('Invalid lead version');
+                if($projectId===$lead['project_id']){$out=['ok'=>true];}
+                else {
+                    if(matchingLeads(['email'=>$lead['email'],'phone'=>$lead['phone']],$projectId))fail('A matching contact exists in the destination project. Review it before moving.',409);
+                    db()->beginTransaction();
+                    $changed=query('UPDATE leads SET project_id=?,version=version+1 WHERE workspace_id=? AND id=? AND version=?',[$projectId,workspace(),$id,$version]);
+                    if(!$changed->rowCount())fail('This lead changed. Reload before moving.',409);
+                    audit($id,'project_moved',['from'=>$lead['project_id'],'to'=>$projectId]);db()->commit();$out=['ok'=>true];
+                }
             }
             elseif($method==='POST'&&$action==='opportunities') {
                 requireRole(['owner','manager','salesperson']);
@@ -201,6 +229,7 @@ try {
             requireRole(['owner','manager','salesperson']);
             $scope=in_array(role(),['owner','manager'],true)?'':" AND (l.owner_user_id=? OR l.collector_user_id=?)";
             $args=in_array(role(),['owner','manager'],true)?[workspace()]:[workspace(),$_SESSION['user_id'],$_SESSION['user_id']];
+            if($project=requestedProject()){$scope.=' AND l.project_id=?';$args[]=$project;}
             $out=query("SELECT t.*,l.name,l.organisation FROM tasks t JOIN leads l ON l.id=t.lead_id AND l.workspace_id=t.workspace_id WHERE t.workspace_id=?$scope ORDER BY t.status,t.due_at LIMIT 500",$args)->fetchAll();
         }
         elseif(preg_match('#^/api/tasks/([a-f0-9]{32})/complete$#',$path,$match)&&$method==='POST') {

@@ -43,6 +43,20 @@ try {
  [$status]=callApi('/opportunities/'.$secondId.'/update',['stage'=>'Proposal','version'=>1]);check($status===200,'second opportunity stage changes');
  [$status]=callApi('/opportunities/'.$secondId.'/update',['stage'=>'Won','version'=>1]);check($status===409,'stale opportunity stage rejected');
  check(query('SELECT stage FROM leads WHERE workspace_id=? AND id=?',[$wid,$lead])->fetchColumn()==='Contacted','second opportunity does not overwrite initial lead stage');
+ [$status,$projects]=callApi('/projects');check($status===200&&count($projects)===1&&$projects[0]['name']==='General','workspace has a default project');
+ $generalProject=$projects[0]['id'];
+ [$status,$project]=callApi('/projects',['name'=>'Pilot project']);$pilotProject=$project['id']??'';check($status===200&&strlen($pilotProject)===32,'owner creates a second project');
+ $pilotData=$data;$pilotData['request_key']=uid();$pilotData['project_id']=$pilotProject;
+ [$status,$pilotLead]=callApi('/leads',$pilotData);check($status===200&&strlen($pilotLead['id']??'')===32,'same contact route can be collected in another project');
+ [$status,$generalLeads]=callApi('/leads?project='.$generalProject);check($status===200&&count($generalLeads)===1&&$generalLeads[0]['id']===$lead,'General lead list stays separate');
+ [$status,$pilotLeads]=callApi('/leads?project='.$pilotProject);check($status===200&&count($pilotLeads)===1&&$pilotLeads[0]['id']===$pilotLead['id'],'project filter shows only its lead');
+ [$status,$pilotOpportunities]=callApi('/opportunities?project='.$pilotProject);check($status===200&&count($pilotOpportunities)===1,'project filter scopes opportunities');
+ [$status,$pilotTasks]=callApi('/tasks?project='.$pilotProject);check($status===200&&count($pilotTasks)===0,'project filter scopes tasks');
+ [$status]=callApi('/leads/'.$pilotLead['id'].'/project',['project_id'=>$generalProject,'version'=>1]);check($status===409,'move rejects duplicate contact in destination project');
+ $moveData=['name'=>'Project mover','email'=>'move-'.bin2hex(random_bytes(4)).'@example.test','project_id'=>$pilotProject,'request_key'=>uid()];
+ [$status,$movable]=callApi('/leads',$moveData);check($status===200&&strlen($movable['id']??'')===32,'lead created in second project for move');
+ [$status]=callApi('/leads/'.$movable['id'].'/project',['project_id'=>$generalProject,'version'=>1]);check($status===200,'owner moves a lead between projects');
+ [$status,$movedList]=callApi('/leads?project='.$generalProject);check($status===200&&count($movedList)===2,'moved lead appears in destination project');
  [$status]=callApi('/tasks/'.$task['id'].'/complete',[]);check($status===200,'task completion');
  $salesUser=uid();$salesEmail='sales-'.bin2hex(random_bytes(4)).'@local.test';
  query('INSERT INTO users (id,workspace_id,name,email,password_hash,role) VALUES (?,?,?,?,?,?)',[$salesUser,$wid,'Sales Rep',$salesEmail,password_hash($password,PASSWORD_DEFAULT),'salesperson']);
@@ -81,6 +95,8 @@ try {
  [$status]=callApi('/tasks');check($status===403,'collector task list denied');
  [$status]=callApi('/opportunities');check($status===403,'collector opportunity list denied');
  [$status]=callApi('/leads/'.$capture['id'].'/opportunities',['offering'=>'Private sale','request_key'=>uid()]);check($status===403,'collector cannot create sales opportunity');
+ [$status]=callApi('/projects',['name'=>'Collector project']);check($status===403,'collector cannot create projects');
+ [$status]=callApi('/leads/'.$capture['id'].'/project',['project_id'=>$pilotProject,'version'=>1]);check($status===403,'collector cannot move project records');
  [$status]=callApi('/leads/'.$capture['id'].'/update',['stage'=>'Qualified','version'=>1]);check($status===403,'collector cannot change commercial stage');
  [$status]=callApi('/leads/'.$capture['id'].'/assign',['user_id'=>$salesUser,'version'=>1]);check($status===403,'collector cannot assign');
  query('UPDATE users SET active=0 WHERE id=?',[$collectorUser]);
@@ -130,11 +146,12 @@ try {
  $cookie='';[$status]=callApi('/plugin/auth',null,['Authorization: Bearer '.$replacementToken]);check($status===401,'revoked plugin token rejected');
  query('DELETE FROM opportunities WHERE workspace_id=?',[$other]);query('DELETE FROM contacts WHERE workspace_id=?',[$other]);query('DELETE FROM organisations WHERE workspace_id=?',[$other]);
  query('DELETE FROM leads WHERE id=?',[$otherLead]);
+ query('DELETE FROM projects WHERE workspace_id=?',[$other]);
  query('DELETE FROM users WHERE id=?',[$otherUser]);
  query('DELETE FROM workspaces WHERE id=?',[$other]);
 } finally {
  query('DELETE FROM plugin_tokens WHERE workspace_id=?',[$wid]);
  query('DELETE FROM account_tokens WHERE workspace_id=?',[$wid]);
- query('DELETE FROM requests WHERE workspace_id=?',[$wid]);query('DELETE FROM assignment_events WHERE workspace_id=?',[$wid]);query('DELETE FROM activities WHERE workspace_id=?',[$wid]);query('DELETE FROM tasks WHERE workspace_id=?',[$wid]);query('DELETE FROM opportunities WHERE workspace_id=?',[$wid]);query('DELETE FROM contacts WHERE workspace_id=?',[$wid]);query('DELETE FROM organisations WHERE workspace_id=?',[$wid]);query('DELETE FROM leads WHERE workspace_id=?',[$wid]);query('DELETE FROM users WHERE workspace_id=?',[$wid]);query('DELETE FROM workspaces WHERE id=?',[$wid]);
+ query('DELETE FROM requests WHERE workspace_id=?',[$wid]);query('DELETE FROM assignment_events WHERE workspace_id=?',[$wid]);query('DELETE FROM activities WHERE workspace_id=?',[$wid]);query('DELETE FROM tasks WHERE workspace_id=?',[$wid]);query('DELETE FROM opportunities WHERE workspace_id=?',[$wid]);query('DELETE FROM contacts WHERE workspace_id=?',[$wid]);query('DELETE FROM organisations WHERE workspace_id=?',[$wid]);query('DELETE FROM leads WHERE workspace_id=?',[$wid]);query('DELETE FROM projects WHERE workspace_id=?',[$wid]);query('DELETE FROM users WHERE workspace_id=?',[$wid]);query('DELETE FROM workspaces WHERE id=?',[$wid]);
 }
 if($failures){fwrite(STDERR,count($failures)." checks failed\n");exit(1);}echo "All checks passed.\n";

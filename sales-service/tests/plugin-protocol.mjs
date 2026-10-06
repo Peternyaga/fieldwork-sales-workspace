@@ -9,8 +9,10 @@ function call(method,params={}){const id=++seq;return new Promise((resolve,rejec
 try{
  const init=await call('initialize',{protocolVersion:'2024-11-05',capabilities:{},clientInfo:{name:'integration-test',version:'1'}});
  if(init.result?.serverInfo?.name!=='sales-workspace')throw new Error('Handshake failed');
- const listed=await call('tools/list');if(!listed.result?.tools?.some(t=>t.name==='list_leads'))throw new Error('Tool list missing');
+ const listed=await call('tools/list');if(!listed.result?.tools?.some(t=>t.name==='list_leads')||!listed.result.tools.some(t=>t.name==='list_projects'))throw new Error('Tool list missing');
+ const projects=await call('tools/call',{name:'list_projects',arguments:{}});
+ if(projects.result?.isError||!Array.isArray(JSON.parse(projects.result?.content?.[0]?.text||'null')))throw new Error('Project lookup failed');
  const result=await call('tools/call',{name:'list_leads',arguments:{}});
  if(result.result?.isError||!Array.isArray(JSON.parse(result.result?.content?.[0]?.text||'null')))throw new Error('Lead lookup failed');
- console.log('MCP handshake, discovery and authenticated lead lookup passed.');
+ console.log('MCP handshake, discovery and authenticated project/lead lookups passed.');
 }finally{child.kill();}

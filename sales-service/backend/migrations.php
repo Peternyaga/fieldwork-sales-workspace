@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__.'/lead-records.php';
+require_once __DIR__.'/projects.php';
 function applySchema(): void {
     foreach(explode(';',file_get_contents(__DIR__.'/schema.sql')) as $sql)if(trim($sql))db()->exec($sql);
     $database=db()->query('SELECT DATABASE()')->fetchColumn();
@@ -11,6 +12,7 @@ function applySchema(): void {
         ['users','auth_version','INT NOT NULL DEFAULT 1'],
         ['leads','owner_user_id','CHAR(32) NULL'],
         ['leads','collector_user_id','CHAR(32) NULL'],
+        ['leads','project_id','CHAR(32) NULL'],
         ['opportunities','version','INT NOT NULL DEFAULT 1'],
         ['opportunities','request_key','VARCHAR(80) NULL']
     ] as [$table,$column,$type]){
@@ -21,11 +23,18 @@ function applySchema(): void {
         ['users','tenant_user','workspace_id,id'],
         ['leads','assigned','workspace_id,owner_user_id'],
         ['leads','submitted','workspace_id,collector_user_id'],
+        ['leads','lead_project','workspace_id,project_id'],
         ['opportunities','opportunity_request','workspace_id,request_key']
     ] as [$table,$index,$columns]){
         $found=query('SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND INDEX_NAME=?',[$database,$table,$index])->fetchColumn();
         if(!$found)db()->exec("CREATE ".($index==='opportunity_request'?'UNIQUE ':'')."INDEX `$index` ON `$table` ($columns)");
     }
+    foreach(query('SELECT id FROM workspaces')->fetchAll() as $workspace){
+        $projectId=defaultProject($workspace['id']);
+        query('UPDATE leads SET project_id=? WHERE workspace_id=? AND project_id IS NULL',[$projectId,$workspace['id']]);
+    }
+    $projectFk=query("SELECT COUNT(*) FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=? AND TABLE_NAME='leads' AND CONSTRAINT_NAME='leads_project_fk'",[$database])->fetchColumn();
+    if(!$projectFk)db()->exec('ALTER TABLE leads ADD CONSTRAINT leads_project_fk FOREIGN KEY (workspace_id,project_id) REFERENCES projects(workspace_id,id)');
     // Existing lead rows are retained. Each receives a contact and, when an
     // offering is known, an opportunity without changing the legacy API yet.
     $legacy=query('SELECT l.* FROM leads l LEFT JOIN contacts c ON c.workspace_id=l.workspace_id AND c.source_lead_id=l.id WHERE c.id IS NULL')->fetchAll();
