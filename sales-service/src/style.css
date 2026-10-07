@@ -44,3 +44,23 @@
 .research-brief p{font-size:11px;margin:8px 0;line-height:1.5}
 .research-brief small{font-size:10px;line-height:1.6}
 .research-brief a{color:#245d47}
+.task-list article{display:block}
+.task-row{display:flex;align-items:center;gap:15px;min-width:0}
+.task-row .task-title{min-width:170px}
+.task-status{font-size:10px;font-weight:700;min-width:53px;color:#5e7861}
+.task-status.cancelled{color:#99745e}
+.task-cancelled{background:#fafaf8}
+.task-cancel-action{background:transparent;color:#9a624f;padding:7px 5px;font-size:11px}
+.task-cancel-action:hover{background:#f6ebe6}
+.task-cancel-form{margin:15px 0 0 35px;display:flex;align-items:end;gap:9px;flex-wrap:wrap}
+.task-cancel-form label{display:flex;flex-direction:column;gap:6px;flex:1;min-width:180px;color:#65785b;font-size:11px}
+.task-cancel-form input{border:1px solid #d9e1d1;border-radius:7px;padding:10px;width:100%}
+.task-cancel-form button{font-size:11px;padding:10px 12px}
+.close-lead{margin:18px 0 25px;padding:17px;border:1px solid #e7e2d8;border-radius:10px;background:#fbfaf7}
+.close-lead>button{font-size:12px;padding:9px 13px}
+.close-lead h3{margin:0 0 7px}
+.close-lead p{font-size:11px;margin-bottom:12px}
+.close-lead textarea{border:1px solid #d9e1d1;background:white;border-radius:7px;padding:11px 12px;width:100%;resize:vertical}
+.close-lead .form-actions{margin:0}
+.closed-lead-note{padding:14px;background:#f3eee8;border-radius:8px;color:#775d4c;font-size:12px;margin:18px 0 25px}
+@media(max-width:700px){.task-row{flex-wrap:wrap;gap:10px}.task-row .task-title{min-width:calc(100% - 42px)}.task-row .phone-actions{margin-left:35px}.task-row .due{margin-left:auto}.task-cancel-action{margin-left:35px}.task-cancel-form{margin-left:0}}

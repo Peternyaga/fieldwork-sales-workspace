@@ -1,5 +1,11 @@
 # Implementation progress
 
+## Cancel follow-ups and close leads — 7 October 2026
+
+- Pending follow-ups can now be cancelled with a required reason from Today, Schedule, or the lead profile. Cancelled tasks remain in Schedule and activity history, cannot be marked complete, and no longer count as pending or determine a lead's next follow-up. Schedule lists pending tasks before historical completed/cancelled tasks.
+- The lead profile has a Close lead form with a required reason. Closing marks the lead Lost, marks its initial opportunity Lost, and cancels every remaining pending task in one database transaction. Completed work remains completed. A closed lead cannot receive a new follow-up until its stage is changed again. The existing stage and initial-opportunity controls also cancel pending tasks if they set the lead to Lost.
+- PHP syntax and frontend build passed. Integration tests verified individual cancellation, invalid status transitions, closure reason and task history, prevention of new tasks on closed leads, and stale close rejection. On a 390px browser viewport, the Cancel reason form and Close lead form both appeared; neither was submitted on a real lead, and the temporary viewport override was reset.
+
 ## Website-development contact research — 7 October 2026
 
 - The ten existing Website development leads had blank phone fields. Publicly listed business numbers were added to all ten lead/contact records in the local database without changing follow-up tasks or calling anyone. Each lead has a `contact_research` activity with the source URL and a reminder to verify the number and decision-maker on the first call. The source age varies; none of these numbers has been confirmed by a conversation.

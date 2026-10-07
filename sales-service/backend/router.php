@@ -7,6 +7,14 @@ require __DIR__.'/projects.php';
 require __DIR__.'/intake.php';
 require __DIR__.'/accounts.php';
 require __DIR__.'/plugin.php';
+function cancelPendingLeadTasks(string $leadId,string $reason): int {
+    $pending=query("SELECT id,title FROM tasks WHERE workspace_id=? AND lead_id=? AND status='pending' FOR UPDATE",[workspace(),$leadId])->fetchAll();
+    foreach($pending as $task){
+        query("UPDATE tasks SET status='cancelled' WHERE workspace_id=? AND id=? AND status='pending'",[workspace(),$task['id']]);
+        audit($leadId,'task_cancelled',['title'=>$task['title'],'reason'=>$reason]);
+    }
+    return count($pending);
+}
 $sessionDir=dirname(__DIR__).'/var/sessions';
 if(!is_dir($sessionDir)) mkdir($sessionDir,0700,true);
 session_save_path($sessionDir);
@@ -121,7 +129,10 @@ try {
             db()->beginTransaction();
             $changed=query('UPDATE opportunities SET stage=?,version=version+1 WHERE workspace_id=? AND id=? AND version=?',[$stage,workspace(),$op['id'],$version]);
             if(!$changed->rowCount())fail('This opportunity changed. Reload before editing.',409);
-            if($op['source_lead_id']!==null)query('UPDATE leads SET stage=?,version=version+1 WHERE workspace_id=? AND id=?',[$stage,workspace(),$op['lead_id']]);
+            if($op['source_lead_id']!==null){
+                query('UPDATE leads SET stage=?,version=version+1 WHERE workspace_id=? AND id=?',[$stage,workspace(),$op['lead_id']]);
+                if($stage==='Lost')cancelPendingLeadTasks($op['lead_id'],'Initial opportunity marked Lost');
+            }
             audit($op['lead_id'],'opportunity_updated',['opportunity_id'=>$op['id'],'stage'=>$stage]);db()->commit();$out=['ok'=>true];
         }
         elseif($path==='/api/leads'&&$method==='GET') {
@@ -151,7 +162,7 @@ try {
                 $results[]=['line'=>$row['line'],'status'=>isset($created['matches'])?'duplicate_existing':(isset($created['replayed'])?'already_imported':'imported'),'id'=>$created['id']??null];
             }
             $out=['rows'=>$results];
-        } elseif(preg_match('#^/api/leads/([a-f0-9]{32})(?:/(notes|update|tasks|assign|project|opportunities))?$#',$path,$match)) {
+        } elseif(preg_match('#^/api/leads/([a-f0-9]{32})(?:/(notes|update|close|tasks|assign|project|opportunities))?$#',$path,$match)) {
             $id=$match[1];$lead=query('SELECT * FROM leads WHERE workspace_id=? AND id=?',[workspace(),$id])->fetch();if(!$lead) fail('Lead not found',404);
             $action=$match[2]??'';
             if(in_array($action,['assign','project'],true))requireRole(['owner','manager']);
@@ -191,6 +202,18 @@ try {
                 db()->commit();
             }
             elseif($method==='POST'&&$action==='notes') {requireRole(['owner','manager','salesperson']);$note=textField($data,'note',10000,true);audit($id,'note',['text'=>$note]);$out=['ok'=>true];}
+            elseif($method==='POST'&&$action==='close') {
+                requireRole(['owner','manager','salesperson']);
+                $reason=textField($data,'reason',1000,true);$version=$data['version']??null;
+                if(!is_int($version))fail('Invalid lead version');
+                db()->beginTransaction();
+                $changed=query("UPDATE leads SET stage='Lost',version=version+1 WHERE workspace_id=? AND id=? AND version=?",[workspace(),$id,$version]);
+                if(!$changed->rowCount())fail('This lead changed. Reload before closing.',409);
+                query("UPDATE opportunities SET stage='Lost',version=version+1 WHERE workspace_id=? AND source_lead_id=?",[workspace(),$id]);
+                $cancelled=cancelPendingLeadTasks($id,$reason);
+                audit($id,'lead_closed',['reason'=>$reason,'cancelled_tasks'=>$cancelled]);
+                db()->commit();$out=['ok'=>true,'cancelled_tasks'=>$cancelled];
+            }
             elseif($method==='POST'&&$action==='update') {
                 requireRole(['owner','manager','salesperson']);
                 $stage=textField($data,'stage',30,true);$version=$data['version']??null;
@@ -198,6 +221,7 @@ try {
                 db()->beginTransaction();$s=query('UPDATE leads SET stage=?,version=version+1 WHERE workspace_id=? AND id=? AND version=?',[$stage,workspace(),$id,$version]);
                 if(!$s->rowCount()) fail('This lead changed. Reload before editing.',409);
                 query('UPDATE opportunities SET stage=?,version=version+1 WHERE workspace_id=? AND source_lead_id=?',[$stage,workspace(),$id]);
+                if($stage==='Lost')cancelPendingLeadTasks($id,'Lead marked Lost');
                 audit($id,'updated',['stage'=>$stage]);db()->commit();$out=['ok'=>true];
             } elseif($method==='POST'&&$action==='assign') {
                 $target=textField($data,'user_id',32,true);$version=$data['version']??null;
@@ -221,6 +245,7 @@ try {
                 db()->commit();$out=['ok'=>true,'owner'=>$member['name']];
             } elseif($method==='POST'&&$action==='tasks') {
                 requireRole(['owner','manager','salesperson']);
+                if($lead['stage']==='Lost')fail('Reopen this lead before adding a follow-up',409);
                 $title=textField($data,'title',250,true);$owner=textField($data,'owner',150,true);$date=textField($data,'due_at',40,true);
                 if(!preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/',$date)) fail('A resolved UTC time is required');
                 try{$due=new DateTimeImmutable($date);}catch(Throwable){fail('Invalid date');}
@@ -231,12 +256,23 @@ try {
             $scope=in_array(role(),['owner','manager'],true)?'':" AND (l.owner_user_id=? OR l.collector_user_id=?)";
             $args=in_array(role(),['owner','manager'],true)?[workspace()]:[workspace(),$_SESSION['user_id'],$_SESSION['user_id']];
             if($project=requestedProject()){$scope.=' AND l.project_id=?';$args[]=$project;}
-            $out=query("SELECT t.*,l.name,l.organisation,l.phone FROM tasks t JOIN leads l ON l.id=t.lead_id AND l.workspace_id=t.workspace_id WHERE t.workspace_id=?$scope ORDER BY t.status,t.due_at LIMIT 500",$args)->fetchAll();
+            $out=query("SELECT t.*,l.name,l.organisation,l.phone FROM tasks t JOIN leads l ON l.id=t.lead_id AND l.workspace_id=t.workspace_id WHERE t.workspace_id=?$scope ORDER BY CASE WHEN t.status='pending' THEN 0 WHEN t.status='completed' THEN 1 ELSE 2 END,t.due_at LIMIT 500",$args)->fetchAll();
         }
-        elseif(preg_match('#^/api/tasks/([a-f0-9]{32})/complete$#',$path,$match)&&$method==='POST') {
+        elseif(preg_match('#^/api/tasks/([a-f0-9]{32})/(complete|cancel)$#',$path,$match)&&$method==='POST') {
             requireRole(['owner','manager','salesperson']);
             db()->beginTransaction();$task=query('SELECT t.*,l.owner_user_id,l.collector_user_id FROM tasks t JOIN leads l ON l.id=t.lead_id AND l.workspace_id=t.workspace_id WHERE t.workspace_id=? AND t.id=? FOR UPDATE',[workspace(),$match[1]])->fetch();if(!$task||!canAccessLead($task)) fail('Task not found',404);
-            if($task['status']!=='completed'){query("UPDATE tasks SET status='completed' WHERE workspace_id=? AND id=?",[workspace(),$match[1]]);audit($task['lead_id'],'task_completed',['title'=>$task['title']]);}db()->commit();$out=['ok'=>true];
+            if($match[2]==='cancel'){
+                $reason=textField($data,'reason',1000,true);
+                if($task['status']==='completed')fail('A completed task cannot be cancelled',409);
+                if($task['status']==='pending'){
+                    query("UPDATE tasks SET status='cancelled' WHERE workspace_id=? AND id=? AND status='pending'",[workspace(),$match[1]]);
+                    audit($task['lead_id'],'task_cancelled',['title'=>$task['title'],'reason'=>$reason]);
+                }
+            } else {
+                if($task['status']==='cancelled')fail('A cancelled task cannot be completed',409);
+                if($task['status']==='pending'){query("UPDATE tasks SET status='completed' WHERE workspace_id=? AND id=?",[workspace(),$match[1]]);audit($task['lead_id'],'task_completed',['title'=>$task['title']]);}
+            }
+            db()->commit();$out=['ok'=>true];
         } else fail('Route not found',404);
     }
     echo json_encode($out,JSON_THROW_ON_ERROR);
