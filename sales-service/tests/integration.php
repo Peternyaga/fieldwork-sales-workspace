@@ -57,6 +57,10 @@ try {
  [$status,$movable]=callApi('/leads',$moveData);check($status===200&&strlen($movable['id']??'')===32,'lead created in second project for move');
  [$status]=callApi('/leads/'.$movable['id'].'/project',['project_id'=>$generalProject,'version'=>1]);check($status===200,'owner moves a lead between projects');
  [$status,$movedList]=callApi('/leads?project='.$generalProject);check($status===200&&count($movedList)===2,'moved lead appears in destination project');
+ [$status,$earlierTask]=callApi('/leads/'.$movable['id'].'/tasks',['title'=>'Earlier call','owner'=>'Tester','due_at'=>'2026-10-01T07:00:00.000Z']);check($status===200,'second lead gets an earlier follow-up');
+ [$status,$ordered]=callApi('/leads?project='.$generalProject);check($status===200&&$ordered[0]['id']===$movable['id']&&$ordered[1]['id']===$lead,'leads sort by earliest pending follow-up');
+ [$status]=callApi('/tasks/'.$earlierTask['id'].'/complete',[]);check($status===200,'earlier follow-up can be completed');
+ [$status,$ordered]=callApi('/leads?project='.$generalProject);check($status===200&&$ordered[0]['id']===$lead&&$ordered[1]['id']===$movable['id']&&$ordered[1]['next_due']===null,'completed follow-ups are ignored and unscheduled leads sort last');
  [$status]=callApi('/tasks/'.$task['id'].'/complete',[]);check($status===200,'task completion');
  $salesUser=uid();$salesEmail='sales-'.bin2hex(random_bytes(4)).'@local.test';
  query('INSERT INTO users (id,workspace_id,name,email,password_hash,role) VALUES (?,?,?,?,?,?)',[$salesUser,$wid,'Sales Rep',$salesEmail,password_hash($password,PASSWORD_DEFAULT),'salesperson']);

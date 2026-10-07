@@ -131,7 +131,8 @@ try {
             if($project=requestedProject()){$scope.=' AND l.project_id=?';$args[]=$project;}
             $fields=$collector?'l.id,l.name,l.organisation,l.stage,l.source,l.offering,l.owner,l.owner_user_id,l.collector,l.collector_user_id,l.version,l.created_at':'l.*';
             $next=$collector?'NULL':"(SELECT MIN(due_at) FROM tasks t WHERE t.workspace_id=l.workspace_id AND t.lead_id=l.id AND t.status='pending')";
-            $out=query("SELECT $fields, $next AS next_due FROM leads l WHERE l.workspace_id=?$scope ORDER BY l.updated_at DESC LIMIT 500",$args)->fetchAll();
+            $order=$collector?'l.updated_at DESC':'next_due IS NULL,next_due ASC,l.name ASC';
+            $out=query("SELECT $fields, $next AS next_due FROM leads l WHERE l.workspace_id=?$scope ORDER BY $order LIMIT 500",$args)->fetchAll();
         } elseif($path==='/api/leads'&&$method==='POST') {
             $project=resolveProject(isset($data['project_id'])?textField($data,'project_id',32,true):null,workspace());
             $out=createLead(leadValues($data),textField($data,'request_key',80,true),$project);

@@ -1,5 +1,10 @@
 # Implementation progress
 
+## Follow-up ordering — 7 October 2026
+
+- The lead API now sorts owner, manager and salesperson lists by each lead's earliest pending follow-up time, ascending, with leads without a pending follow-up last. Collector handoff records keep their previous recent-submission order because collectors cannot access sales tasks. The dashboard section is now labelled **Next relationships**.
+- Integration coverage verified earlier due dates first, completed follow-ups ignored, and unscheduled leads last. PHP syntax, the full integration suite and frontend build passed. The live dashboard displayed the five earliest Website development leads in the expected order, starting Highlands Academy Timau at 08:45 Africa/Nairobi.
+
 ## Mobile lead-view fix — 7 October 2026
 
 - The phone-access preview at `http://192.168.100.6:5179/` is a plain-HTTP LAN origin. The browser reports `isSecureContext=false` and does not provide `crypto.randomUUID()`. Mounting a lead profile mounted OpportunityPanel, whose request-key initializer called that unavailable method and crashed the React view to a blank page. The same call also affected lead capture and CSV intake.
