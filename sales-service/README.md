@@ -38,3 +38,9 @@ When the plugin package is copied outside this repository (as Codex does during 
 ## Checks
 
 `npm run build` builds the frontend. `php tests/integration.php` checks a temporary isolated test workspace against MySQL and cleans up only records created by that test. `node tests/plugin-protocol.mjs` checks the local MCP bridge. PHP files can be syntax checked with `php -l`.
+
+## Agent attention (local prototype)
+
+Recording a note flags that specific lead and note for later agent review. Select **Number busy** when a call reached a busy line; the plugin can then inspect the lead and internal task schedule and create one new internal call follow-up. The service rejects a conflicting time and duplicate handling of the same item. General notes remain for review rather than causing automatic changes based on their text.
+
+The attention queue and MCP tools are implemented, but periodic Codex execution is not active until the plugin is installed, connected to the owner's account, and a recurring run is configured and tested. The task list is internal to Fieldwork; external calendar availability is not yet connected. No calls, messages, or invitations are sent by this workflow.

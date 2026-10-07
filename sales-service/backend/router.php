@@ -201,7 +201,17 @@ try {
                 }
                 db()->commit();
             }
-            elseif($method==='POST'&&$action==='notes') {requireRole(['owner','manager','salesperson']);$note=textField($data,'note',10000,true);audit($id,'note',['text'=>$note]);$out=['ok'=>true];}
+            elseif($method==='POST'&&$action==='notes') {
+                requireRole(['owner','manager','salesperson']);
+                $note=textField($data,'note',10000,true);
+                $outcome=textField($data,'outcome',30);
+                if(!in_array($outcome,['','busy','no_answer','connected','other'],true))fail('Invalid call outcome',422);
+                db()->beginTransaction();
+                $activityId=uid();
+                query('INSERT INTO activities (id,workspace_id,lead_id,kind,body,actor) VALUES (?,?,?,?,?,?)',[$activityId,workspace(),$id,'note',json_encode(['text'=>$note,'outcome'=>$outcome],JSON_THROW_ON_ERROR),$_SESSION['user_name']]);
+                query('INSERT INTO agent_work_items (id,workspace_id,lead_id,source_activity_id,kind) VALUES (?,?,?,?,?)',[uid(),workspace(),$id,$activityId,$outcome==='busy'?'busy_call':'review_note']);
+                db()->commit();$out=['ok'=>true,'queued_for_agent'=>true];
+            }
             elseif($method==='POST'&&$action==='close') {
                 requireRole(['owner','manager','salesperson']);
                 $reason=textField($data,'reason',1000,true);$version=$data['version']??null;
@@ -251,7 +261,39 @@ try {
                 try{$due=new DateTimeImmutable($date);}catch(Throwable){fail('Invalid date');}
                 db()->beginTransaction();$task=uid();query('INSERT INTO tasks (id,workspace_id,lead_id,title,owner,due_at) VALUES (?,?,?,?,?,?)',[$task,workspace(),$id,$title,$owner,$due->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s')]);audit($id,'task_created',['title'=>$title,'due_at'=>$date]);db()->commit();$out=['id'=>$task];
             } else fail('Route not found',404);
-        } elseif($path==='/api/tasks'&&$method==='GET') {
+        } elseif($path==='/api/agent-work'&&$method==='GET') {
+            requireRole(['owner','manager','salesperson']);
+            $scope=in_array(role(),['owner','manager'],true)?'':" AND l.owner_user_id=?";
+            $args=in_array(role(),['owner','manager'],true)?[workspace()]:[workspace(),$_SESSION['user_id']];
+            $out=query("SELECT w.id,w.lead_id,w.kind,w.status,w.created_at,l.name,l.organisation,l.project_id,a.body AS source_note FROM agent_work_items w JOIN leads l ON l.id=w.lead_id AND l.workspace_id=w.workspace_id JOIN activities a ON a.id=w.source_activity_id WHERE w.workspace_id=? AND w.status='pending'$scope ORDER BY w.created_at,w.id LIMIT 50",$args)->fetchAll();
+        }
+        elseif(preg_match('#^/api/agent-work/([a-f0-9]{32})/(schedule-call|resolve)$#',$path,$workMatch)&&$method==='POST') {
+            requireRole(['owner','manager','salesperson']);
+            db()->beginTransaction();
+            $work=query('SELECT w.*,l.owner_user_id,l.collector_user_id,l.owner,l.stage FROM agent_work_items w JOIN leads l ON l.id=w.lead_id AND l.workspace_id=w.workspace_id WHERE w.workspace_id=? AND w.id=? FOR UPDATE',[workspace(),$workMatch[1]])->fetch();
+            if(!$work||!canAccessLead($work))fail('Agent work item not found',404);
+            if($work['status']!=='pending')fail('This work item was already handled',409);
+            if($workMatch[2]==='schedule-call'){
+                if($work['kind']!=='busy_call'||$work['stage']==='Lost')fail('This call cannot be rescheduled',409);
+                $date=textField($data,'due_at',40,true);
+                if(!preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/',$date))fail('A resolved UTC time is required',422);
+                $due=new DateTimeImmutable($date);$dueUtc=$due->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+                if($due<=new DateTimeImmutable('+5 minutes'))fail('Choose a future call time',422);
+                $owner=$work['owner'];if($owner==='')fail('Assign this lead before scheduling a call',422);
+                $conflicts=query("SELECT id FROM tasks WHERE workspace_id=? AND owner=? AND status='pending' AND due_at>=DATE_SUB(?,INTERVAL 20 MINUTE) AND due_at<DATE_ADD(?,INTERVAL 20 MINUTE) LIMIT 1",[workspace(),$owner,$dueUtc,$dueUtc])->fetch();
+                if($conflicts)fail('This person already has a task near that time',409);
+                $taskId=uid();query('INSERT INTO tasks (id,workspace_id,lead_id,title,owner,due_at) VALUES (?,?,?,?,?,?)',[$taskId,workspace(),$work['lead_id'],'Call again after busy line',$owner,$dueUtc]);
+                audit($work['lead_id'],'task_created',['title'=>'Call again after busy line','due_at'=>$date,'source_work_item'=>$work['id']]);
+                $result=['task_id'=>$taskId,'due_at'=>$date];
+            }else{
+                $decision=textField($data,'decision',30,true);$reason=textField($data,'reason',1000,true);
+                if(!in_array($decision,['done','needs_review'],true))fail('Invalid decision',422);
+                $result=['decision'=>$decision,'reason'=>$reason];
+            }
+            query('UPDATE agent_work_items SET status=?,completed_at=UTC_TIMESTAMP(),result=? WHERE workspace_id=? AND id=?',[$workMatch[2]==='schedule-call'?'done':$decision,json_encode($result,JSON_THROW_ON_ERROR),workspace(),$work['id']]);
+            db()->commit();$out=['ok'=>true]+$result;
+        }
+        elseif($path==='/api/tasks'&&$method==='GET') {
             requireRole(['owner','manager','salesperson']);
             $scope=in_array(role(),['owner','manager'],true)?'':" AND (l.owner_user_id=? OR l.collector_user_id=?)";
             $args=in_array(role(),['owner','manager'],true)?[workspace()]:[workspace(),$_SESSION['user_id'],$_SESSION['user_id']];

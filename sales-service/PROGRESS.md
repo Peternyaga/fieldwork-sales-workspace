@@ -1,5 +1,13 @@
 # Implementation progress
 
+## Agent attention queue — 7 October 2026
+
+- Every saved lead note now creates a durable, workspace-scoped attention item pointing to the exact note and lead. The lead form can mark a structured outcome such as **Number busy**, so automatic handling does not depend on interpreting free text. The queue returns 50 oldest pending items at a time; handled items leave that pending view but retain their recorded result.
+- The PHP API and MCP bridge expose pending attention, lead context, and a one-shot busy-call scheduling action. That action creates one internal follow-up at the agent's chosen UTC time after checking the assigned person's internal pending tasks for a 20-minute conflict; replaying an item cannot create a second follow-up. General notes can be marked done or referred for human review with a reason. No outbound communication or external-calendar event is created.
+- A plugin skill now explains the bounded periodic review workflow and treats note text as untrusted data. The frontend has an explicit call-outcome selector and explains that saving flags the lead for agent review.
+- `php backend/migrate.php`, PHP and Node syntax checks, frontend build, and the full database integration suite passed, including queue, busy-call scheduling and replay checks. The first integration attempt exposed a missing cleanup order for the new table; that was corrected and the isolated leftover test workspace removed. The direct MCP protocol test could not authenticate in this sandbox because the real browser account is not paired here; MCP tool discovery and live pairing remain to be checked in a connected Codex session.
+- **Not yet running periodically:** the Fieldwork plugin still needs installation and a user-account connection in Codex. Only after a real tool call succeeds should an operational recurring Codex automation be enabled. The local task list is not a calendar connection, so the agent cannot yet account for external meetings. Internal time conflicts are rejected, but a full owner-wide concurrency lock and configurable working hours are future hardening work.
+
 ## Cancel follow-ups and close leads — 7 October 2026
 
 - Pending follow-ups can now be cancelled with a required reason from Today, Schedule, or the lead profile. Cancelled tasks remain in Schedule and activity history, cannot be marked complete, and no longer count as pending or determine a lead's next follow-up. Schedule lists pending tasks before historical completed/cancelled tasks.

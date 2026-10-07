@@ -37,6 +37,19 @@ try {
  [$status,$callList]=callApi('/tasks');check($status===200&&($callList[0]['phone']??'')==='+254700000001','task list includes callable lead phone');
  [$status,$history]=callApi('/leads/'.$lead);check($status===200&&count($history['activities'])===4&&count($history['tasks'])===1,'durable history');
  check($status===200&&count($history['opportunities']??[])===1,'lead detail includes initial opportunity');
+ [$status,$attention]=callApi('/agent-work');check($status===200&&count($attention)===1&&$attention[0]['kind']==='review_note','note queues precise agent attention');
+ $reviewId=$attention[0]['id'];[$status]=callApi('/agent-work/'.$reviewId.'/resolve',['decision'=>'needs_review','reason'=>'No automatic action for a general note']);check($status===200,'general note can be referred for review');
+ [$status]=callApi('/leads/'.$lead.'/notes',['note'=>'Number was busy; call again','outcome'=>'busy']);check($status===200,'busy call outcome recorded');
+ [$status,$attention]=callApi('/agent-work');check($status===200&&count($attention)===1&&$attention[0]['kind']==='busy_call'&&$attention[0]['lead_id']===$lead,'busy outcome points to exact lead');
+ $busyId=$attention[0]['id'];$nextCall=(new DateTimeImmutable('+2 days',new DateTimeZone('UTC')))->setTime(9,0)->format('Y-m-d\TH:i:s.000\Z');
+ [$status,$scheduled]=callApi('/agent-work/'.$busyId.'/schedule-call',['due_at'=>$nextCall]);check($status===200&&strlen($scheduled['task_id']??'')===32,'agent schedules one internal busy-call follow-up');
+ [$status]=callApi('/agent-work/'.$busyId.'/schedule-call',['due_at'=>$nextCall]);check($status===409,'replayed attention item does not duplicate task');
+ [$status,$attention]=callApi('/agent-work');check($status===200&&count($attention)===0,'handled work leaves pending queue');
+ [$status]=callApi('/leads/'.$lead.'/notes',['note'=>'Second busy attempt','outcome'=>'busy']);check($status===200,'second busy event gets separate attention');
+ [$status,$attention]=callApi('/agent-work');$conflictId=$attention[0]['id'];
+ [$status]=callApi('/agent-work/'.$conflictId.'/schedule-call',['due_at'=>$nextCall]);check($status===409,'agent cannot double-book assigned person');
+ [$status,$attention]=callApi('/agent-work');check($status===200&&$attention[0]['id']===$conflictId,'conflicted work remains pending');
+ [$status]=callApi('/agent-work/'.$conflictId.'/resolve',['decision'=>'needs_review','reason'=>'No safe internal slot chosen']);check($status===200,'conflicted work can be referred for review');
  $offerRequest=uid();[$status,$second]=callApi('/leads/'.$lead.'/opportunities',['offering'=>'Maintenance','request_key'=>$offerRequest]);
  $secondId=$second['id']??'';check($status===200&&strlen($secondId)===32,'second opportunity for one contact');
  [$status,$replayed]=callApi('/leads/'.$lead.'/opportunities',['offering'=>'Maintenance','request_key'=>$offerRequest]);check($status===200&&($replayed['replayed']??false)&&$replayed['id']===$secondId,'opportunity creation is idempotent');
@@ -173,6 +186,6 @@ try {
 } finally {
  query('DELETE FROM plugin_tokens WHERE workspace_id=?',[$wid]);
  query('DELETE FROM account_tokens WHERE workspace_id=?',[$wid]);
- query('DELETE FROM requests WHERE workspace_id=?',[$wid]);query('DELETE FROM assignment_events WHERE workspace_id=?',[$wid]);query('DELETE FROM activities WHERE workspace_id=?',[$wid]);query('DELETE FROM tasks WHERE workspace_id=?',[$wid]);query('DELETE FROM opportunities WHERE workspace_id=?',[$wid]);query('DELETE FROM contacts WHERE workspace_id=?',[$wid]);query('DELETE FROM organisations WHERE workspace_id=?',[$wid]);query('DELETE FROM leads WHERE workspace_id=?',[$wid]);query('DELETE FROM projects WHERE workspace_id=?',[$wid]);query('DELETE FROM users WHERE workspace_id=?',[$wid]);query('DELETE FROM workspaces WHERE id=?',[$wid]);
+ query('DELETE FROM requests WHERE workspace_id=?',[$wid]);query('DELETE FROM assignment_events WHERE workspace_id=?',[$wid]);query('DELETE FROM agent_work_items WHERE workspace_id=?',[$wid]);query('DELETE FROM activities WHERE workspace_id=?',[$wid]);query('DELETE FROM tasks WHERE workspace_id=?',[$wid]);query('DELETE FROM opportunities WHERE workspace_id=?',[$wid]);query('DELETE FROM contacts WHERE workspace_id=?',[$wid]);query('DELETE FROM organisations WHERE workspace_id=?',[$wid]);query('DELETE FROM leads WHERE workspace_id=?',[$wid]);query('DELETE FROM projects WHERE workspace_id=?',[$wid]);query('DELETE FROM users WHERE workspace_id=?',[$wid]);query('DELETE FROM workspaces WHERE id=?',[$wid]);
 }
 if($failures){fwrite(STDERR,count($failures)." checks failed\n");exit(1);}echo "All checks passed.\n";
