@@ -1,5 +1,10 @@
 # Implementation progress
 
+## Mobile lead-view fix — 7 October 2026
+
+- The phone-access preview at `http://192.168.100.6:5179/` is a plain-HTTP LAN origin. The browser reports `isSecureContext=false` and does not provide `crypto.randomUUID()`. Mounting a lead profile mounted OpportunityPanel, whose request-key initializer called that unavailable method and crashed the React view to a blank page. The same call also affected lead capture and CSV intake.
+- Added a shared request-key generator that uses `crypto.randomUUID()` when available, then `crypto.getRandomValues()`, and finally a UUID-shaped non-secret idempotency key when Web Crypto is absent. The LAN browser generated a valid UUID with `randomUUID` unavailable; a rendered OpportunityPanel showed its controls on that same origin. The no-Web-Crypto fallback passed a direct check, and `npm run build` passed. The actual phone session has not been retested by the user yet.
+
 ## Latest checkpoint — 6 October 2026
 
 - The owner's local workspace contains ten previously collected website-development leads. Their records had no logged call outcomes, so they remain uncalled in the app. All ten are now assigned to the owner account and grouped in **Website development**; **General** is empty. The collected person names are unconfirmed placeholders, and several phone numbers are missing. Do not represent these as verified contacts.
