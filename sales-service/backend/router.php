@@ -231,7 +231,7 @@ try {
             $scope=in_array(role(),['owner','manager'],true)?'':" AND (l.owner_user_id=? OR l.collector_user_id=?)";
             $args=in_array(role(),['owner','manager'],true)?[workspace()]:[workspace(),$_SESSION['user_id'],$_SESSION['user_id']];
             if($project=requestedProject()){$scope.=' AND l.project_id=?';$args[]=$project;}
-            $out=query("SELECT t.*,l.name,l.organisation FROM tasks t JOIN leads l ON l.id=t.lead_id AND l.workspace_id=t.workspace_id WHERE t.workspace_id=?$scope ORDER BY t.status,t.due_at LIMIT 500",$args)->fetchAll();
+            $out=query("SELECT t.*,l.name,l.organisation,l.phone FROM tasks t JOIN leads l ON l.id=t.lead_id AND l.workspace_id=t.workspace_id WHERE t.workspace_id=?$scope ORDER BY t.status,t.due_at LIMIT 500",$args)->fetchAll();
         }
         elseif(preg_match('#^/api/tasks/([a-f0-9]{32})/complete$#',$path,$match)&&$method==='POST') {
             requireRole(['owner','manager','salesperson']);

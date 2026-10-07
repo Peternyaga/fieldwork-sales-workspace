@@ -26,3 +26,21 @@
   .sidebar-navigation .plugin-connect{margin-top:7px}
   .sidebar-navigation .plugin-connect .nav{width:100%;padding:11px 12px}
 }
+
+.phone-actions{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.phone-actions a{color:#245d47;font-weight:700;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px;white-space:nowrap}
+.phone-actions a:hover{color:#123c2b}
+.phone-copy{padding:5px 8px;background:#e7efe5;color:#245d47;font-size:10px;border-radius:5px}
+.phone-copy:hover{background:#d9e9d8}
+.phone-actions small{color:#52745a;font-size:10px}
+.phone-missing{color:#9a6c45;font-size:11px;white-space:nowrap}
+.task-list .phone-actions{margin-left:auto}
+.contact-info .phone-actions{font-size:17px}
+.contact-info .phone-copy{font-size:11px}
+@media(max-width:700px){.task-list .phone-actions{margin-left:35px}.task-list .due{margin-left:0}.table-card td .phone-actions{min-width:125px}}
+.research-brief{background:#f1f5ec;border:1px solid #dce9d8;border-radius:10px;padding:17px 18px;margin:-9px 0 22px}
+.research-brief .eyebrow{margin-bottom:7px}
+.research-brief strong{display:block;font-size:14px;color:#31533c}
+.research-brief p{font-size:11px;margin:8px 0;line-height:1.5}
+.research-brief small{font-size:10px;line-height:1.6}
+.research-brief a{color:#245d47}

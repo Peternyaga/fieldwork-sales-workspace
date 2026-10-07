@@ -1,5 +1,12 @@
 # Implementation progress
 
+## Website-development contact research — 7 October 2026
+
+- The ten existing Website development leads had blank phone fields. Publicly listed business numbers were added to all ten lead/contact records in the local database without changing follow-up tasks or calling anyone. Each lead has a `contact_research` activity with the source URL and a reminder to verify the number and decision-maker on the first call. The source age varies; none of these numbers has been confirmed by a conversation.
+- Named research leads: Isaiah Mbaabu was reported as Highlands Academy Timau headteacher in 2022 (current role and purchase authority unconfirmed); Dyna Mukami Gitonga is listed by KOMM Advocates as managing partner; a 2025 Kenya Law ruling names Desderio Nyaga Nyamu as proprietor of Nyamu Nyaga & Co. For the remaining organisations, no sufficiently reliable current owner/approver was found; their records suggest asking for the owner, general manager, school director, or principal advocate as appropriate. Existing contact-name placeholders remain marked unconfirmed.
+- Lead tables, follow-up lists, and lead profiles now display available numbers as `tel:` links with Copy controls. A contact research brief in each researched profile shows the candidate person or role, verification status, and source links. Copy uses the Clipboard API when permitted and a user-initiated fallback for plain-HTTP LAN access. The task-list API now includes lead phone numbers.
+- PHP syntax, frontend build, and full integration suite passed, including a new assertion that the task list contains a callable lead number. A signed-in browser showed the ten numbers on the dashboard; at 390px width, the lead drawer showed its call link, and the Copy control returned “Copied.” The temporary viewport override was reset. No outbound calls or messages were made.
+
 ## Follow-up ordering — 7 October 2026
 
 - The lead API now sorts owner, manager and salesperson lists by each lead's earliest pending follow-up time, ascending, with leads without a pending follow-up last. Collector handoff records keep their previous recent-submission order because collectors cannot access sales tasks. The dashboard section is now labelled **Next relationships**.

@@ -34,6 +34,7 @@ try {
  [$status]=callApi('/leads/'.$lead.'/update',['stage'=>'Qualified','owner'=>'Tester','version'=>1]);check($status===409,'stale edit rejected');
  [$status]=callApi('/leads/'.$lead.'/notes',['note'=>'Reached and asked for Friday call']);check($status===200,'call outcome note');
  [$status,$task]=callApi('/leads/'.$lead.'/tasks',['title'=>'Call Friday','owner'=>'Tester','due_at'=>'2026-10-02T07:00:00.000Z']);check($status===200&&strlen($task['id']??'')===32,'internal task');
+ [$status,$callList]=callApi('/tasks');check($status===200&&($callList[0]['phone']??'')==='+254700000001','task list includes callable lead phone');
  [$status,$history]=callApi('/leads/'.$lead);check($status===200&&count($history['activities'])===4&&count($history['tasks'])===1,'durable history');
  check($status===200&&count($history['opportunities']??[])===1,'lead detail includes initial opportunity');
  $offerRequest=uid();[$status,$second]=callApi('/leads/'.$lead.'/opportunities',['offering'=>'Maintenance','request_key'=>$offerRequest]);
