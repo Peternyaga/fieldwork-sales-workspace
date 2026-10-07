@@ -1,0 +1,20 @@
+{
+  "name": "fieldwork-local",
+  "interface": {
+    "displayName": "Fieldwork local plugins"
+  },
+  "plugins": [
+    {
+      "name": "sales-workspace",
+      "source": {
+        "source": "local",
+        "path": "./sales-workspace"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
