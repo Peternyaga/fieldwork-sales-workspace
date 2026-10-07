@@ -1,5 +1,12 @@
 # Implementation progress
 
+## Hosted OAuth connection checkpoint — 7 October 2026
+
+- Compared Timeline Curator's remote OAuth plugin packaging with Fieldwork's local stdio package. Fieldwork's existing `ON_INSTALL` marketplace setting alone cannot open account linking while `.mcp.json` only launches a local process. The local package remains unchanged.
+- Added a separate prototype PHP router for protected-resource and authorization-server discovery, PKCE sign-in and consent, public-client registration, hashed bearer and rotating refresh tokens, and six read-only, workspace-scoped MCP tools. Added repeatable OAuth tables. This route is not exposed by the running local web app and has not been deployed.
+- The disposable loopback OAuth round-trip passed: discovery, registration, sign-in, consent and exact callback, wrong-verifier and replay rejection, authenticated MCP lead lookup, 401 challenge, session-free bearer calls, refresh rotation, and old-token revocation. The full local integration suite and frontend build also passed after the change.
+- `HOSTED-CONNECTION.md` records the hosting configuration and remaining work. A real HTTPS URL, account-facing revocation, rate limits, cleanup, security review, MCP Inspector check and Codex install test are still required. Do not present installation redirect as working yet.
+
 ## Install-time authentication finding — 7 October 2026
 
 - Inspected the installed Timeline Curator package. Its MCP server is a remote HTTPS endpoint (`https://curator.vumbualabs.com/mcp`) declared with `auth: "oauth"` and scopes in `.mcp.json`; its README says Codex opens Timeline's login/consent page and completes OAuth Authorization Code with PKCE. This is the account-authorization redirect the user saw, not an arbitrary plugin-install script opening a URL.
