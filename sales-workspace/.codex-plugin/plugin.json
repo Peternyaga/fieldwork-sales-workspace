@@ -13,7 +13,7 @@
     "developerName": "Local developer",
     "category": "Productivity",
     "capabilities": [],
-    "defaultPrompt": "Set up Fieldwork and open my local sales workspace."
+    "defaultPrompt": "Open my local Fieldwork sign-in or setup page, connect this plugin to my account, and verify a read-only lead lookup."
   },
   "mcpServers": "./.mcp.json"
 }

@@ -76,6 +76,7 @@ try {
         if(!isset($_SESSION['user_id'])) fail('Sign in to continue',401);
         if($path==='/api/logout'&&$method==='POST') {$_SESSION=[];session_destroy();$out=['ok'=>true];}
         elseif($path==='/api/plugin/connect'&&$method==='POST') {$out=connectLocalPlugin();}
+        elseif($path==='/api/plugin/status'&&$method==='GET') {$out=localPluginStatus();}
         elseif($path==='/api/team/members'&&$method==='GET') {
             requireRole(['owner']);
             $out=query('SELECT id,name,email,role,active,setup_pending FROM users WHERE workspace_id=? ORDER BY name',[workspace()])->fetchAll();

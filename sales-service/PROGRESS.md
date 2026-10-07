@@ -1,5 +1,11 @@
 # Implementation progress
 
+## Codex connection status and onboarding — 7 October 2026
+
+- The previous **Connect Codex** confirmation was misleading: clicking it created a 30-day access token even when no plugin was installed. The app now reports **Access token prepared** until an authenticated plugin client calls the local API; only then does it report **Plugin access verified**, with last-used and expiry times. A repeat click rotates the token, so setup guidance now avoids asking the user to click again when access is already prepared.
+- The plugin's first-use prompt and setup skill guide Codex to open the Fieldwork sign-in/setup page and verify a read-only tool call. This does not run automatically at installation. Current OpenAI documentation describes local plugin discovery after restarting the desktop app and session-start hooks that require separate trust; it does not establish a reliable install-time browser redirect for this local package. No untrusted auto-launch hook was added.
+- Schema migration, PHP syntax, frontend build, full integration checks and isolated pairing checks passed. Pairing checks now prove the prepared-to-verified transition. The first isolated run passed its assertions but exposed test cleanup that missed the default project; cleanup was fixed, the disposable workspace and token file removed, and the full isolated run passed.
+
 ## Agent attention queue — 7 October 2026
 
 - Every saved lead note now creates a durable, workspace-scoped attention item pointing to the exact note and lead. The lead form can mark a structured outcome such as **Number busy**, so automatic handling does not depend on interpreting free text. The queue returns 50 oldest pending items at a time; handled items leave that pending view but retain their recorded result.

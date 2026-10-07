@@ -27,16 +27,19 @@ try {
     query('INSERT INTO users (id,workspace_id,name,email,password_hash,role) VALUES (?,?,?,?,?,?)',[$user,$workspace,'Pairing Tester',$email,password_hash($password,PASSWORD_DEFAULT),'owner']);
     [$status,$session]=pairRequest('/session');$csrf=$session['csrf']??'';requirePair($status===200&&strlen($csrf)>20,'isolated session');
     [$status]=pairRequest('/login',['email'=>$email,'password'=>$password]);requirePair($status===200,'disposable owner login');
-    [$status,$connected]=pairRequest('/plugin/connect',[]);requirePair($status===200&&($connected['connected']??false)&&file_exists($file),'connection writes isolated credential file');
+    [$status,$connected]=pairRequest('/plugin/connect',[]);requirePair($status===200&&($connected['prepared']??false)&&file_exists($file),'connection prepares isolated credential file');
+    [$status,$state]=pairRequest('/plugin/status');requirePair($status===200&&$state['state']==='prepared','pre-install access is not shown as verified');
     $first=json_decode(file_get_contents($file),true)['token']??'';requirePair((bool)preg_match('/^[a-f0-9]{64}$/',$first),'credential file contains a valid token');
     [$status]=pairRequest('/plugin/connect',[]);requirePair($status===200,'reconnecting replaces the credential file');
     $second=json_decode(file_get_contents($file),true)['token']??'';requirePair($second!==$first&&strlen($second)===64,'reconnection rotates the token');
     $cookie='';[$status]=pairRequest('/plugin/auth',null,['Authorization: Bearer '.$first]);requirePair($status===401,'old token is revoked');
     [$status]=pairRequest('/plugin/auth',null,['Authorization: Bearer '.$second]);requirePair($status===200,'new token authenticates');
+    [$status,$state]=pairRequest('/plugin/status');requirePair($status===200&&$state['state']==='verified','live plugin authentication verifies connection');
     exec('node tests/plugin-protocol.mjs 2>&1',$output,$exitCode);requirePair($exitCode===0,'MCP bridge uses browser-paired account');
     echo "All isolated pairing checks passed.\n";
 } finally {
     query('DELETE FROM plugin_tokens WHERE workspace_id=?',[$workspace]);
+    query('DELETE FROM projects WHERE workspace_id=?',[$workspace]);
     query('DELETE FROM users WHERE workspace_id=?',[$workspace]);
     query('DELETE FROM workspaces WHERE id=?',[$workspace]);
     if(file_exists($file))unlink($file);

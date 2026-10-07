@@ -44,3 +44,7 @@ When the plugin package is copied outside this repository (as Codex does during 
 Recording a note flags that specific lead and note for later agent review. Select **Number busy** when a call reached a busy line; the plugin can then inspect the lead and internal task schedule and create one new internal call follow-up. The service rejects a conflicting time and duplicate handling of the same item. General notes remain for review rather than causing automatic changes based on their text.
 
 The attention queue and MCP tools are implemented, but periodic Codex execution is not active until the plugin is installed, connected to the owner's account, and a recurring run is configured and tested. The task list is internal to Fieldwork; external calendar availability is not yet connected. No calls, messages, or invitations are sent by this workflow.
+
+## Plugin onboarding
+
+The **Connect Codex** button prepares a local access token, even before plugin installation. The app calls it **Access token prepared** until an installed plugin actually authenticates; then it shows **Plugin access verified**. Installing the local plugin does not automatically open Fieldwork. Its first-use setup prompt guides Codex to open the app, sign in, connect if needed, and verify a read-only lookup. Local plugin installation may require restarting the Codex desktop app to discover the marketplace. A trusted session-start hook could open a page later, but it is not an install-time redirect and is not bundled here.

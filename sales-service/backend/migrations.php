@@ -10,6 +10,7 @@ function applySchema(): void {
         ['users','active','TINYINT(1) NOT NULL DEFAULT 1'],
         ['users','setup_pending','TINYINT(1) NOT NULL DEFAULT 0'],
         ['users','auth_version','INT NOT NULL DEFAULT 1'],
+        ['plugin_tokens','last_used_at','DATETIME NULL'],
         ['leads','owner_user_id','CHAR(32) NULL'],
         ['leads','collector_user_id','CHAR(32) NULL'],
         ['leads','project_id','CHAR(32) NULL'],
