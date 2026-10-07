@@ -1,9 +1,15 @@
 # Implementation progress
 
+## Install-time authentication finding — 7 October 2026
+
+- Inspected the installed Timeline Curator package. Its MCP server is a remote HTTPS endpoint (`https://curator.vumbualabs.com/mcp`) declared with `auth: "oauth"` and scopes in `.mcp.json`; its README says Codex opens Timeline's login/consent page and completes OAuth Authorization Code with PKCE. This is the account-authorization redirect the user saw, not an arbitrary plugin-install script opening a URL.
+- **Correction to the earlier onboarding assessment:** install-time account linking is possible when the plugin has a compatible OAuth-protected MCP server and its marketplace requests authentication on install. Fieldwork's marketplace already declares `ON_INSTALL`, but its MCP server is a local `node` process with no OAuth; therefore that flag cannot produce the Timeline-style login flow by itself. Fieldwork still uses a local 30-day token prepared inside the web app.
+- For the hosted, reusable Fieldwork plugin, build an HTTPS MCP endpoint and standards-compliant OAuth authorization server that redirects to Fieldwork login/consent, returns to Codex, and verifies scoped access tokens per user. Then change the plugin MCP configuration to OAuth and test installation/linking on a disposable account. Keep the current local token setup as the local prototype until that exists. No authentication redirect was added or claimed to work in this local build.
+
 ## Codex connection status and onboarding — 7 October 2026
 
 - The previous **Connect Codex** confirmation was misleading: clicking it created a 30-day access token even when no plugin was installed. The app now reports **Access token prepared** until an authenticated plugin client calls the local API; only then does it report **Plugin access verified**, with last-used and expiry times. A repeat click rotates the token, so setup guidance now avoids asking the user to click again when access is already prepared.
-- The plugin's first-use prompt and setup skill guide Codex to open the Fieldwork sign-in/setup page and verify a read-only tool call. This does not run automatically at installation. Current OpenAI documentation describes local plugin discovery after restarting the desktop app and session-start hooks that require separate trust; it does not establish a reliable install-time browser redirect for this local package. No untrusted auto-launch hook was added.
+- The plugin's first-use prompt and setup skill guide Codex to open the Fieldwork sign-in/setup page and verify a read-only tool call. This does not run automatically at installation for the current local-process package. No untrusted auto-launch hook was added.
 - Schema migration, PHP syntax, frontend build, full integration checks and isolated pairing checks passed. Pairing checks now prove the prepared-to-verified transition. The first isolated run passed its assertions but exposed test cleanup that missed the default project; cleanup was fixed, the disposable workspace and token file removed, and the full isolated run passed.
 
 ## Agent attention queue — 7 October 2026
