@@ -13,11 +13,18 @@ $root=(Resolve-Path -LiteralPath $WorkspaceRoot).Path
 $pluginList=(& $codex plugin list | Out-String)
 if($pluginList -notmatch 'sales-workspace-hosted@[a-z0-9-]+\s+installed, enabled'){throw 'Install and enable the Fieldwork Reach plugin before setting up the poller.'}
 $dataDirectory=Join-Path $root '.fieldwork-reach'
+$launcher=Join-Path $dataDirectory 'poller-hidden.vbs'
+$wscript=Join-Path $env:SystemRoot 'System32\wscript.exe'
+if(-not (Test-Path -LiteralPath $wscript)){throw 'Windows Script Host is unavailable; the poller was not changed.'}
+$hiddenAction=New-ScheduledTaskAction -Execute $wscript -Argument ('//B "'+$launcher+'"')
 $existing=Get-ScheduledTask -TaskName 'Fieldwork Reach Poller' -ErrorAction SilentlyContinue
 if($existing){
     if(-not (Test-Path -LiteralPath (Join-Path $dataDirectory 'credential.txt'))){throw 'The scheduled task exists but its credential is missing. Remove the old task before reinstalling.'}
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'poller.ps1') -Destination (Join-Path $dataDirectory 'poller.ps1') -Force
-    Write-Host 'Fieldwork Reach poller is already installed. Its local script was updated.'
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'poller-hidden.vbs') -Destination $launcher -Force
+    try {Set-ScheduledTask -TaskName 'Fieldwork Reach Poller' -Action $hiddenAction | Out-Null}
+    catch {throw 'The poller files were updated, but its scheduled launch could not be changed. '+$_.Exception.Message}
+    Write-Host 'Fieldwork Reach poller now starts without a visible console.'
     return
 }
 New-Item -ItemType Directory -Path $dataDirectory -Force | Out-Null
@@ -42,11 +49,10 @@ $cipher=[System.Security.Cryptography.ProtectedData]::Protect([Text.Encoding]::U
 [Convert]::ToBase64String($cipher) | Set-Content -LiteralPath (Join-Path $dataDirectory 'credential.txt') -Encoding Ascii
 @{origin=$Origin;workspace=$root;codex=$codex} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $dataDirectory 'config.json') -Encoding UTF8
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'poller.ps1') -Destination (Join-Path $dataDirectory 'poller.ps1') -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'poller-hidden.vbs') -Destination $launcher -Force
 $check=Invoke-RestMethod -Method Get -Uri ($Origin+'/api/automation/ready') -Headers @{Authorization="Bearer $token"} -TimeoutSec 15
 if($null -eq $check.ready){throw 'The readiness check did not return the expected result.'}
-    $script=Join-Path $dataDirectory 'poller.ps1'
-    $argument='-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "'+$script+'" -DataDirectory "'+$dataDirectory+'"'
-    $action=New-ScheduledTaskAction -Execute (Join-Path $PSHOME 'powershell.exe') -Argument $argument
+    $action=$hiddenAction
     $logon=New-ScheduledTaskTrigger -AtLogOn -User ([Security.Principal.WindowsIdentity]::GetCurrent().Name)
     $repeat=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration (New-TimeSpan -Days 3650)
     $settings=New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Hours 1)
@@ -55,7 +61,7 @@ if($null -eq $check.ready){throw 'The readiness check did not return the expecte
 } catch {
     Unregister-ScheduledTask -TaskName 'Fieldwork Reach Poller' -Confirm:$false -ErrorAction SilentlyContinue
     try{Invoke-RestMethod -Method Post -Uri ($Origin+'/api/automation/revoke-self') -Headers @{Authorization="Bearer $token"} -ContentType 'application/json' -Body '{}' -TimeoutSec 15 | Out-Null}catch{}
-    foreach($name in @('credential.txt','config.json','poller.ps1')){Remove-Item -LiteralPath (Join-Path $dataDirectory $name) -Force -ErrorAction SilentlyContinue}
+    foreach($name in @('credential.txt','config.json','poller.ps1','poller-hidden.vbs')){Remove-Item -LiteralPath (Join-Path $dataDirectory $name) -Force -ErrorAction SilentlyContinue}
     throw 'Poller setup failed after approval. No poller was installed. '+$_.Exception.Message
 }
 Write-Host 'Fieldwork Reach poller installed for this Windows account. It checks at sign-in and every five minutes while this account is signed in.'

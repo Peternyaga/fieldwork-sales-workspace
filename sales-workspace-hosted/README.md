@@ -1,4 +1,4 @@
-# Fieldwork Reach for Codex — 0.4.1
+# Fieldwork Reach for Codex — 0.4.2
 
 Connect to https://reach.vumbualabs.com/mcp using OAuth. Manage accessible leads and internal tasks, correct eleven profile fields with provenance and retained history, and process queued work with guarded reversal. No calls, messages or external calendar events are sent.
 
@@ -27,6 +27,10 @@ Restart Codex desktop and test in a new chat. Reapprove OAuth only if the existi
 Install the marketplace package first. Disable `sales-workspace-hosted@fieldwork-local` after the marketplace copy is enabled to avoid duplicate tools. Both packages use the same `fieldwork` server name, HTTPS endpoint and scopes; preserve the existing connection and verify a read before reauthenticating. Do not log out or revoke the existing grant just to change package source.
 
 The optional Windows poller is separate from OAuth. Keep the `.fieldwork-reach` directory and the existing `Fieldwork Reach Poller` scheduled task. Run the new package's `scripts/install-poller.ps1 -Accept -WorkspaceRoot <your existing workspace>` to update its script; when that task and credential exist, the installer preserves pairing. For first-time installation, invoke the setup skill to review permissions and approve pairing in Reach. The poller runs only while the configured Windows user is signed in and the machine is online; work remains queued while offline.
+
+## Release 0.4.2
+
+The optional Windows poller now launches without a visible console. Running the installer again updates an existing scheduled task while preserving its pairing, account, and schedule.
 
 ## Release 0.4.1
 
