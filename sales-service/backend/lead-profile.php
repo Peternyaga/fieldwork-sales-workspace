@@ -18,10 +18,15 @@ function profileValue(string $field,mixed $value): string {
 }
 function editLeadProfile(string $id,array $args): array {
     requireRole(['owner','manager','salesperson']);
-    foreach(array_keys($args) as $key)if(!in_array($key,['version','changes','provenance','source_activity_id'],true))fail('Unexpected argument',422);
+    foreach(array_keys($args) as $key)if(!in_array($key,['version','changes','provenance','source_activity_id','evidence_type','source_url'],true))fail('Unexpected argument',422);
     $version=$args['version']??null;$changes=$args['changes']??null;
     if(!is_int($version)||$version<1||!is_array($changes)||!count($changes))fail('Supply current version and profile changes',422);
     $provenance=textField($args,'provenance',2000,true);
+    $evidenceType=textField($args,'evidence_type',30)?:'user_supplied';
+    if(!in_array($evidenceType,['user_supplied','public_source'],true))fail('Invalid evidence type',422);
+    $sourceUrl=textField($args,'source_url',1000);
+    if($evidenceType==='public_source'&&$sourceUrl==='')fail('Public-source edits require a source URL',422);
+    if($sourceUrl!==''&&(!filter_var($sourceUrl,FILTER_VALIDATE_URL)||!in_array(strtolower(parse_url($sourceUrl,PHP_URL_SCHEME)??''),['http','https'],true)||parse_url($sourceUrl,PHP_URL_USER)!==null||parse_url($sourceUrl,PHP_URL_PASS)!==null))fail('Use an http(s) source URL without credentials',422);
     $values=[];foreach($changes as $field=>$value)$values[$field]=profileValue((string)$field,$value);
     $source=$args['source_activity_id']??null;
     if($source!==null&&(!is_string($source)||!preg_match('/^[a-f0-9]{32}$/',$source)))fail('Invalid source activity',422);
@@ -48,7 +53,7 @@ function editLeadProfile(string $id,array $args): array {
                 query('UPDATE contacts SET organisation_id=? WHERE workspace_id=? AND id=?',[$organisationId,workspace(),$contact['id']]);
             }
         }
-        audit($id,'profile_updated',['changes'=>$delta,'provenance'=>$provenance,'source_activity_id'=>$source,'verification'=>'User-supplied; not independently verified','actor_user_id'=>$_SESSION['user_id']]);
+        audit($id,'profile_updated',['changes'=>$delta,'provenance'=>$provenance,'source_activity_id'=>$source,'evidence_type'=>$evidenceType,'source_url'=>$sourceUrl?:null,'verification'=>$evidenceType==='public_source'?'Public source; current accuracy not independently confirmed':'User-supplied; not independently verified','actor_user_id'=>$_SESSION['user_id']]);
         db()->commit();return ['ok'=>true,'version'=>$version+1,'changed'=>true];
     }catch(Throwable $error){if(db()->inTransaction())db()->rollBack();throw $error;}
 }

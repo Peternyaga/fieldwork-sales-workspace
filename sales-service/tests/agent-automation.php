@@ -36,13 +36,31 @@ try{
     [$status,$finished]=agentApi('/automation/pair/finish',['id'=>$pair['id'],'verifier'=>$verifier]);$token=$finished['token']??'';
     agentCheck($status===200&&strlen($token)===43,'paired computer receives its credential');
     [$status,$empty]=agentApi('/automation/ready',null,$token);agentCheck($status===200&&$empty['ready']===false,'empty queue costs no model call');
+    $taskKey=bin2hex(random_bytes(16));$instruction='Research the public website and update this lead with sources.';
+    [$status,$requested]=agentApi('/leads/'.$lead.'/agent-requests',['instruction'=>$instruction,'request_key'=>$taskKey]);
+    agentCheck($status===200&&($requested['queued']??false)===true,'signed-in user queues a free-form lead task');
+    [$status,$replayed]=agentApi('/leads/'.$lead.'/agent-requests',['instruction'=>$instruction,'request_key'=>$taskKey]);
+    agentCheck($status===200&&($replayed['replayed']??false)===true&&$replayed['id']===$requested['id'],'request retry does not duplicate work');
+    [$status]=agentApi('/leads/'.$lead.'/agent-requests',['instruction'=>'Different action','request_key'=>$taskKey]);
+    agentCheck($status===409,'request key cannot be reused for different instructions');
+    $queuedRequest=query('SELECT w.kind,w.source_activity_id,a.body FROM agent_work_items w JOIN activities a ON a.id=w.source_activity_id WHERE w.id=?',[$requested['id']])->fetch();
+    $requestBody=json_decode($queuedRequest['body'],true);
+    agentCheck($queuedRequest['kind']==='user_request'&&$requestBody['instruction']===$instruction&&$requestBody['requested_by_user_id']===$user,'request is explicitly typed and attributed');
+    $_SESSION=['workspace_id'=>$workspace,'user_id'=>$user,'user_name'=>'Test Owner','user_role'=>'owner'];
+    try{hostedWrite('update_lead_website',['id'=>$lead,'version'=>1,'value'=>'https://example.org','provenance'=>'Public test source','evidence_type'=>'public_source']);agentCheck(false,'public source without URL should fail');}catch(RuntimeException $e){agentCheck($e->getCode()===422,'public-source edit requires URL');}
+    $profileEdit=hostedWrite('update_lead_website',['id'=>$lead,'version'=>1,'value'=>'https://example.org','provenance'=>'Synthetic official site for test','source_activity_id'=>$queuedRequest['source_activity_id'],'evidence_type'=>'public_source','source_url'=>'https://example.org/about']);
+    $profileAudit=query("SELECT body FROM activities WHERE workspace_id=? AND lead_id=? AND kind='profile_updated' ORDER BY created_at DESC,id DESC LIMIT 1",[$workspace,$lead])->fetchColumn();
+    agentCheck(($profileEdit['changed']??false)===true&&json_decode($profileAudit,true)['source_url']==='https://example.org/about','public research edit retains provenance and source');
+    $completed=hostedWrite('resolve_agent_work',['id'=>$requested['id'],'decision'=>'done','reason'=>'Updated website from the cited public test source.','sources'=>['https://example.org/about']]);
+    agentCheck(($completed['sources'][0]??'')==='https://example.org/about'&&($completed['actions'][0]['field']??'')==='website','free-form task report retains actual profile edit and research source');
     $activity=uid();$work=uid();
     query('INSERT INTO activities (id,workspace_id,lead_id,kind,body,actor) VALUES (?,?,?,?,?,?)',[$activity,$workspace,$lead,'note','{"text":"Lead was unavailable"}','Test Owner']);
     query('INSERT INTO agent_work_items (id,workspace_id,lead_id,source_activity_id,kind) VALUES (?,?,?,?,?)',[$work,$workspace,$lead,$activity,'busy_call']);
     [$status,$ready]=agentApi('/automation/ready',null,$token);agentCheck($status===200&&$ready['ready']===true,'new work is visible to deterministic poller');
     $_SESSION=['workspace_id'=>$workspace,'user_id'=>$user,'user_name'=>'Test Owner','user_role'=>'owner'];
     $scheduled=hostedWrite('schedule_agent_followup',['id'=>$work,'title'=>'Call again','due_at'=>gmdate('Y-m-d\TH:i:s',time()+86400).'.000Z','summary'=>'Created a follow-up after the busy note.']);
-    [$status,$reports]=agentApi('/agent-reports');agentCheck($status===200&&($reports[0]['result']['actions'][0]['task_id']??'')===$scheduled['task_id'],'user report records the exact action');
+    [$status,$reports]=agentApi('/agent-reports');$scheduledReport=array_values(array_filter($reports,fn($row)=>$row['id']===$work))[0]??[];
+    agentCheck($status===200&&($scheduledReport['result']['actions'][0]['task_id']??'')===$scheduled['task_id'],'user report records the exact action');
     [$status,$reversal]=agentApi('/agent-work/'.$work.'/request-reversal',['reason'=>'No longer needed']);
     agentCheck($status===200&&isset($reversal['work_id']),'user request queues separate reversal work');
     $undone=hostedWrite('reverse_agent_work',['id'=>$reversal['work_id']]);
@@ -94,7 +112,7 @@ try{
     [$status,$again]=agentApi('/agent-work/'.$work3.'/review',$correction);agentCheck($status===200&&$again['next_work_id']===$queued['next_work_id'],'correction retry does not duplicate work');
     [$status,$ready]=agentApi('/automation/ready',null,$token);agentCheck($status===200&&$ready['ready']===true,'explicit new work wakes poller');
     $next=query('SELECT w.*,a.body FROM agent_work_items w JOIN activities a ON a.id=w.source_activity_id WHERE w.id=?',[$queued['next_work_id']])->fetch();
-    $context=json_decode($next['body'],true);agentCheck($next['status']==='pending'&&$context['reviewed_work_id']===$work3&&$context['agent_report']['summary']==='Clarify callback time.','new work retains context');
+    $context=json_decode($next['body'],true);agentCheck($next['status']==='pending'&&$next['kind']==='user_request'&&$context['instruction']===$correction['reason']&&$context['reviewed_work_id']===$work3&&$context['agent_report']['summary']==='Clarify callback time.','correction becomes explicit user work and retains context');
     $_SESSION=['workspace_id'=>$workspace,'user_id'=>$user,'user_name'=>'Test Owner','user_role'=>'salesperson'];
     try{hostedWrite('resolve_agent_work',['id'=>$work3,'decision'=>'done','reason'=>'Repeat']);agentCheck(false,'closed item cannot be reprocessed');}catch(RuntimeException $e){agentCheck($e->getCode()===409,'MCP refuses closed item');}
     query("UPDATE users SET role='owner' WHERE id=?",[$user]);

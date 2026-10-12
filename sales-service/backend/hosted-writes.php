@@ -49,7 +49,7 @@ function hostedWriteAgentItem(string $id): array {
 }
 function hostedWrite(string $name,array $args): array {
     if(str_starts_with($name,'update_lead_')&&isset(profileFields()[substr($name,12)])){
-        hostedWriteArgs($args,['id','version','value','provenance','source_activity_id']);
+        hostedWriteArgs($args,['id','version','value','provenance','source_activity_id','evidence_type','source_url']);
         $id=hostedWriteId($args,'id');$field=substr($name,12);unset($args['id']);
         $args['changes']=[$field=>$args['value']??null];unset($args['value']);
         return editLeadProfile($id,$args);
@@ -147,12 +147,24 @@ function hostedWrite(string $name,array $args): array {
         db()->commit();return ['ok'=>true]+$result;
     }
     if($name==='resolve_agent_work'){
-        hostedWriteArgs($args,['id','decision','reason']);
+        hostedWriteArgs($args,['id','decision','reason','sources']);
         $id=hostedWriteId($args,'id');$decision=textField($args,'decision',30,true);$reason=textField($args,'reason',1000,true);
         if(!in_array($decision,['done','needs_review'],true))fail('Invalid decision',422);
+        $sources=$args['sources']??[];
+        if(!is_array($sources)||!array_is_list($sources)||count($sources)>10)fail('Invalid sources',422);
+        foreach($sources as $url){if(!is_string($url)||strlen($url)>1000||!filter_var($url,FILTER_VALIDATE_URL)||!in_array(strtolower(parse_url($url,PHP_URL_SCHEME)??''),['http','https'],true)||parse_url($url,PHP_URL_USER)!==null||parse_url($url,PHP_URL_PASS)!==null)fail('Use http(s) source URLs without credentials',422);}
         db()->beginTransaction();$work=hostedWriteAgentItem($id);
         if($work['kind']==='reverse_work')fail('Use reverse_agent_work for reversal requests',422);
-        $result=['decision'=>$decision,'summary'=>$reason,'reason'=>$reason,'actions'=>[]];
+        $actions=[];
+        $history=query("SELECT body FROM activities WHERE workspace_id=? AND lead_id=? AND kind='profile_updated' AND created_at>=? ORDER BY created_at,id",[workspace(),$work['lead_id'],$work['created_at']])->fetchAll();
+        foreach($history as $entry){
+            $audit=json_decode($entry['body'],true);
+            if(($audit['source_activity_id']??null)!==$work['source_activity_id'])continue;
+            foreach(($audit['changes']??[]) as $field=>$change)$actions[]=['type'=>'update_lead_profile','field'=>$field,'from'=>$change['from']??'','to'=>$change['to']??''];
+            if(!empty($audit['source_url'])&&!in_array($audit['source_url'],$sources,true))$sources[]=$audit['source_url'];
+        }
+        $sources=array_slice($sources,0,10);
+        $result=['decision'=>$decision,'summary'=>$reason,'reason'=>$reason,'actions'=>$actions,'sources'=>$sources];
         query('UPDATE agent_work_items SET status=?,completed_at=UTC_TIMESTAMP(),result=? WHERE workspace_id=? AND id=?',[$decision,json_encode($result,JSON_THROW_ON_ERROR),workspace(),$id]);
         db()->commit();return ['ok'=>true]+$result;
     }

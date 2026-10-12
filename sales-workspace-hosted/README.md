@@ -1,4 +1,4 @@
-# Fieldwork Reach for Codex — 0.4.2
+# Fieldwork Reach for Codex — 0.4.3
 
 Connect to https://reach.vumbualabs.com/mcp using OAuth. Manage accessible leads and internal tasks, correct eleven profile fields with provenance and retained history, and process queued work with guarded reversal. No calls, messages or external calendar events are sent.
 

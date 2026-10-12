@@ -196,7 +196,7 @@ try {
                 $results[]=['line'=>$row['line'],'status'=>isset($created['matches'])?'duplicate_existing':(isset($created['replayed'])?'already_imported':'imported'),'id'=>$created['id']??null];
             }
             $out=['rows'=>$results];
-        } elseif(preg_match('#^/api/leads/([a-f0-9]{32})(?:/(notes|update|close|tasks|assign|project|opportunities|profile))?$#',$path,$match)) {
+        } elseif(preg_match('#^/api/leads/([a-f0-9]{32})(?:/(notes|agent-requests|update|close|tasks|assign|project|opportunities|profile))?$#',$path,$match)) {
             $id=$match[1];$lead=query('SELECT * FROM leads WHERE workspace_id=? AND id=?',[workspace(),$id])->fetch();if(!$lead) fail('Lead not found',404);
             $action=$match[2]??'';
             if(in_array($action,['assign','project'],true))requireRole(['owner','manager']);
@@ -235,6 +235,29 @@ try {
                     audit($id,'opportunity_created',['opportunity_id'=>$opportunityId,'offering'=>$offering]);$out=['id'=>$opportunityId];
                 }
                 db()->commit();
+            }
+            elseif($method==='POST'&&$action==='agent-requests') {
+                requireRole(['owner','manager','salesperson']);
+                foreach(array_keys($data) as $key)if(!in_array($key,['instruction','request_key'],true))fail('Unexpected request field',422);
+                $instruction=textField($data,'instruction',4000,true);
+                $requestKey=textField($data,'request_key',64,true);
+                if(!preg_match('/^[a-zA-Z0-9-]{16,64}$/',$requestKey))fail('Invalid request key',422);
+                $workId=substr(hash('sha256',workspace().':'.$_SESSION['user_id'].':'.$requestKey),0,32);
+                db()->beginTransaction();
+                try {
+                    $prior=query('SELECT w.id,w.lead_id,a.body FROM agent_work_items w JOIN activities a ON a.id=w.source_activity_id WHERE w.workspace_id=? AND w.id=? FOR UPDATE',[workspace(),$workId])->fetch();
+                    if($prior){
+                        $body=json_decode($prior['body'],true);
+                        if($prior['lead_id']!==$id||($body['instruction']??null)!==$instruction||($body['requested_by_user_id']??null)!==$_SESSION['user_id'])fail('Request key already used',409);
+                        $out=['id'=>$workId,'replayed'=>true];
+                    }else{
+                        $activityId=uid();
+                        query('INSERT INTO activities (id,workspace_id,lead_id,kind,body,actor) VALUES (?,?,?,?,?,?)',[$activityId,workspace(),$id,'agent_request',json_encode(['instruction'=>$instruction,'requested_by_user_id'=>$_SESSION['user_id']],JSON_THROW_ON_ERROR),$_SESSION['user_name']]);
+                        query('INSERT INTO agent_work_items (id,workspace_id,lead_id,source_activity_id,kind) VALUES (?,?,?,?,?)',[$workId,workspace(),$id,$activityId,'user_request']);
+                        $out=['id'=>$workId,'queued'=>true];
+                    }
+                    db()->commit();
+                }catch(Throwable $e){if(db()->inTransaction())db()->rollBack();throw $e;}
             }
             elseif($method==='POST'&&$action==='notes') {
                 requireRole(['owner','manager','salesperson']);

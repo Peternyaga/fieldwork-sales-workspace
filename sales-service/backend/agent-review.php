@@ -23,10 +23,10 @@ function reviewAgentWork(string $id,array $data): array {
         $next=null;
         if($action==='request_correction'){
             $next=uid();$activity=uid();
-            $context=['reviewed_work_id'=>$id,'instructions'=>$reason,'agent_report'=>$result,'original_source_activity_id'=>$work['source_activity_id']];
+            $context=['reviewed_work_id'=>$id,'instruction'=>$reason,'instructions'=>$reason,'requested_by_user_id'=>$_SESSION['user_id'],'agent_report'=>$result,'original_source_activity_id'=>$work['source_activity_id']];
             query('INSERT INTO activities (id,workspace_id,lead_id,kind,body,actor) VALUES (?,?,?,?,?,?)',[$activity,workspace(),$work['lead_id'],'agent_correction_requested',json_encode($context,JSON_THROW_ON_ERROR),$_SESSION['user_name']]);
             // A correction is new work, not a follow-up task or an automatic retry/reversal.
-            query('INSERT INTO agent_work_items (id,workspace_id,lead_id,source_activity_id,kind) VALUES (?,?,?,?,?)',[$next,workspace(),$work['lead_id'],$activity,'review_note']);
+            query('INSERT INTO agent_work_items (id,workspace_id,lead_id,source_activity_id,kind) VALUES (?,?,?,?,?)',[$next,workspace(),$work['lead_id'],$activity,'user_request']);
         }
         $review=['action'=>$action,'reason'=>$reason,'user_id'=>$_SESSION['user_id'],'actor'=>$_SESSION['user_name'],'at'=>gmdate('Y-m-d H:i:s'),'request_id'=>$request,'fingerprint'=>$fingerprint,'next_work_id'=>$next];
         $result['human_review']=$review;
