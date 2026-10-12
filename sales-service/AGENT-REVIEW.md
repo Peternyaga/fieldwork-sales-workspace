@@ -50,8 +50,7 @@ of the production frontend build.
 The live page at https://reach.vumbualabs.com/ served
 `/assets/index-CTlIbO1s.js` during this check. The new packaged frontend is
 `/assets/index-kFG4TieK.js`, so the deployed frontend does not match this build.
-The live backend source was not accessible for comparison. No production
-deployment was performed.
+This was the pre-deployment comparison. Production delivery is recorded below.
 
 The uploadable archive is `publish/fieldwork-reach-upgrade.zip`. Follow
 `deploy/README.md`: upload it outside public_html under the domain directory,
@@ -66,3 +65,28 @@ a closed item staying out of readiness, a correction appearing once in the
 queue, audit history and the OAuth MCP connection. Preserve installer backups.
 Plugin/marketplace updates are unnecessary for this session-only UI endpoint:
 existing agent tools already read the new source context and reject closed work.
+
+## Verified production delivery
+
+Commit `5209cc8` was pushed to `origin/main` and deployed on 12 October 2026
+at approximately 15:56 Africa/Nairobi using `fieldwork-review-5209cc8.zip`.
+The uploaded archive SHA-256 matched the local package:
+`199ece5252a32a92d596b1e32e93cf39611a65d916b5870c51d666c8defa5343`.
+Before deployment, production bootstrap, schema, hosted write handlers and
+migrations matched the local source; production CLI PHP was 8.3.35.
+
+The backup-first installer reported success and current schema. Its retained
+backup is `/home/supashop/domains/reach.vumbualabs.com/fieldwork-backups/20261012T125603Z/`.
+Verified the nonempty database dump and saved backend router. Installed router,
+review handler and frontend asset checksums matched the packaged files.
+
+The authenticated live Agent activity view now shows both review controls on
+the existing Nevada Palace Hotel and Nyamu Nyaga reports. Both forms open,
+require a note and disable submission while empty. The linked Nevada Palace
+lead profile loads. No review decision was submitted on customer records.
+No browser console errors were captured during these checks.
+The authenticated OAuth `list_agent_work` tool returned an empty pending queue.
+Unauthenticated readiness and MCP data tool calls returned 401; public MCP tool
+discovery remains available by design. Local integration tests verify the actual
+close/correction mutations and audit/poller behavior; production verification
+was read-only apart from installing the release.
