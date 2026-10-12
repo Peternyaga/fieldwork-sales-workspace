@@ -1,3 +1,9 @@
+## Product-independent catalog — 12 October 2026
+
+- Moved the Vumbua Labs catalog to https://github.com/Peternyaga/vumbua-labs-plugins so marketplace installation no longer uses a product-specific repository address. The shared catalog contains Timeline Curator and Fieldwork Reach; the Timeline application remains in its own product repository.
+- Fieldwork plugin 0.4.1 updates the distribution address and installation documentation. Marketplace identity, plugin IDs, OAuth server names/endpoints/scopes and poller scripts remain unchanged. Replaced the existing local marketplace source registration and refreshed Fieldwork successfully; existing Timeline package remains installed and enabled.
+- Existing users replace the marketplace source registration once, refresh their plugin and restart desktop. This does not require uninstalling plugins, revoking OAuth or deleting poller pairing. New testers add only the shared catalog address. The old product-repository catalog is retired after the shared installation is verified.
+
 ## Marketplace publication — 12 October 2026
 
 - Hosted Fieldwork Reach plugin 0.4.0 is published in the existing public Vumbua Labs marketplace at https://github.com/Peternyaga/timeline-curator. Pull request #4 merged after both CI runs passed. Timeline Curator remains in the same catalog.

@@ -8,6 +8,6 @@ React, PHP and MySQL sales workspace with lead intake, projects, team access, co
 - [Hosted Codex plugin and installation](sales-workspace-hosted/README.md)
 - [Local stdio plugin](sales-workspace/)
 
-The hosted application is at https://reach.vumbualabs.com. The hosted plugin is distributed through the existing [Vumbua Labs marketplace](https://github.com/Peternyaga/timeline-curator), alongside Timeline Curator. Testers need their own authorized Fieldwork account; publication does not grant access to another workspace. External messaging, calls and calendar synchronization are not implemented.
+The hosted application is at https://reach.vumbualabs.com. The hosted plugin is distributed through the shared [Vumbua Labs marketplace](https://github.com/Peternyaga/vumbua-labs-plugins). Testers need their own authorized Fieldwork account; publication does not grant access to another workspace. External messaging, calls and calendar synchronization are not implemented.
 
 Keep database credentials, OAuth/poller state, customer records, database backups and generated release archives outside Git. Configuration templates contain placeholders only.

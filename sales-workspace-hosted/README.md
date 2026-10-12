@@ -1,4 +1,4 @@
-# Fieldwork Reach for Codex — 0.4.0
+# Fieldwork Reach for Codex — 0.4.1
 
 Connect to https://reach.vumbualabs.com/mcp using OAuth. Manage accessible leads and internal tasks, correct eleven profile fields with provenance and retained history, and process queued work with guarded reversal. No calls, messages or external calendar events are sent.
 
@@ -7,7 +7,7 @@ Connect to https://reach.vumbualabs.com/mcp using OAuth. Manage accessible leads
 Add the existing Vumbua Labs marketplace and install the hosted plugin:
 
 ```powershell
-codex plugin marketplace add Peternyaga/timeline-curator --ref main
+codex plugin marketplace add Peternyaga/vumbua-labs-plugins --ref main
 codex plugin add sales-workspace-hosted@vumbua-labs
 ```
 
@@ -28,8 +28,8 @@ Install the marketplace package first. Disable `sales-workspace-hosted@fieldwork
 
 The optional Windows poller is separate from OAuth. Keep the `.fieldwork-reach` directory and the existing `Fieldwork Reach Poller` scheduled task. Run the new package's `scripts/install-poller.ps1 -Accept -WorkspaceRoot <your existing workspace>` to update its script; when that task and credential exist, the installer preserves pairing. For first-time installation, invoke the setup skill to review permissions and approve pairing in Reach. The poller runs only while the configured Windows user is signed in and the machine is online; work remains queued while offline.
 
-## Release 0.4.0
+## Release 0.4.1
 
-Adds the dedicated lead-profile skill, updated queue correction/recovery guidance and a poller prompt that invokes that workflow. Profile fields: phone, email, website, Facebook, Instagram, LinkedIn, name, organisation, contact role, location and source. Each tool requires current version and factual provenance. Historical values are retained. Ambiguous evidence needs review.
+Moves distribution to the dedicated Vumbua Labs catalog while retaining the same plugin identity and OAuth endpoint. Includes the dedicated lead-profile skill, updated queue correction/recovery guidance and a poller prompt that invokes that workflow. Profile fields: phone, email, website, Facebook, Instagram, LinkedIn, name, organisation, contact role, location and source. Each tool requires current version and factual provenance. Historical values are retained. Ambiguous evidence needs review.
 
-Source: [Fieldwork sales workspace](https://github.com/Peternyaga/fieldwork-sales-workspace/tree/main/sales-workspace-hosted). Distribution: [Vumbua Labs](https://github.com/Peternyaga/timeline-curator/tree/main/plugins/sales-workspace-hosted).
+Source: [Fieldwork sales workspace](https://github.com/Peternyaga/fieldwork-sales-workspace/tree/main/sales-workspace-hosted). Distribution: [Vumbua Labs](https://github.com/Peternyaga/vumbua-labs-plugins/tree/main/plugins/sales-workspace-hosted).
