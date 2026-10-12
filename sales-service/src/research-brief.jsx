@@ -8,9 +8,9 @@ export function ResearchBrief({activities}) {
   const source = /^https:\/\//.test(research.source || '') ? research.source : null;
   const personSource = /^https:\/\//.test(research.person_source || '') ? research.person_source : null;
   return <section className="research-brief" aria-label="Public-source contact research">
-    <span className="eyebrow">BEFORE YOU CALL</span>
+    <span className="eyebrow">HISTORICAL RESEARCH · UNVERIFIED</span>
     <strong>{research.person ? `${research.person} · ${research.role}` : research.target_role}</strong>
     <p>{research.person ? 'Publicly named contact; confirm their current role and whether they approve website work.' : 'No current decision-maker was reliably identified. Ask the person answering who approves website or marketing work.'}</p>
-    <small>The number is publicly listed, not verified by a call. {source && <a href={source} target="_blank" rel="noopener noreferrer">Number source ↗</a>}{personSource && personSource !== source && <> · <a href={personSource} target="_blank" rel="noopener noreferrer">Person source ↗</a></>}</small>
+    <small>This older research may be superseded by later notes. Confirm identity and contact details. {source && <a href={source} target="_blank" rel="noopener noreferrer">Number source ↗</a>}{personSource && personSource !== source && <> · <a href={personSource} target="_blank" rel="noopener noreferrer">Person source ↗</a></>}</small>
   </section>;
 }

@@ -14,8 +14,17 @@ function applySchema(): void {
         ['leads','owner_user_id','CHAR(32) NULL'],
         ['leads','collector_user_id','CHAR(32) NULL'],
         ['leads','project_id','CHAR(32) NULL'],
+        ['leads','website',"VARCHAR(500) NOT NULL DEFAULT ''"],
+        ['leads','facebook',"VARCHAR(500) NOT NULL DEFAULT ''"],
+        ['leads','instagram',"VARCHAR(500) NOT NULL DEFAULT ''"],
+        ['leads','linkedin',"VARCHAR(500) NOT NULL DEFAULT ''"],
+        ['leads','contact_role',"VARCHAR(150) NOT NULL DEFAULT ''"],
+        ['leads','location',"VARCHAR(250) NOT NULL DEFAULT ''"],
         ['opportunities','version','INT NOT NULL DEFAULT 1'],
-        ['opportunities','request_key','VARCHAR(80) NULL']
+        ['opportunities','request_key','VARCHAR(80) NULL'],
+        ['oauth_grants','created_at','TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP'],
+        ['agent_work_items','parent_work_id','CHAR(32) NULL'],
+        ['agent_poll_pairings','device_name',"VARCHAR(120) NOT NULL DEFAULT 'Windows computer'"]
     ] as [$table,$column,$type]){
         $found=query('SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND COLUMN_NAME=?',[$database,$table,$column])->fetchColumn();
         if(!$found)db()->exec("ALTER TABLE `$table` ADD COLUMN `$column` $type");
@@ -25,10 +34,11 @@ function applySchema(): void {
         ['leads','assigned','workspace_id,owner_user_id'],
         ['leads','submitted','workspace_id,collector_user_id'],
         ['leads','lead_project','workspace_id,project_id'],
-        ['opportunities','opportunity_request','workspace_id,request_key']
+        ['opportunities','opportunity_request','workspace_id,request_key'],
+        ['agent_work_items','reversal_once','workspace_id,parent_work_id']
     ] as [$table,$index,$columns]){
         $found=query('SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND INDEX_NAME=?',[$database,$table,$index])->fetchColumn();
-        if(!$found)db()->exec("CREATE ".($index==='opportunity_request'?'UNIQUE ':'')."INDEX `$index` ON `$table` ($columns)");
+        if(!$found)db()->exec("CREATE ".(in_array($index,['opportunity_request','reversal_once'],true)?'UNIQUE ':'')."INDEX `$index` ON `$table` ($columns)");
     }
     foreach(query('SELECT id FROM workspaces')->fetchAll() as $workspace){
         $projectId=defaultProject($workspace['id']);

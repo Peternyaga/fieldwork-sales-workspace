@@ -29,7 +29,7 @@ try{
     $params=['response_type'=>'code','client_id'=>$clientId,'redirect_uri'=>'http://127.0.0.1:4567/callback','scope'=>'leads:read','state'=>'roundtrip-test','resource'=>'http://127.0.0.1:8791/mcp','code_challenge'=>$challenge,'code_challenge_method'=>'S256'];
     [$status,,$head,$html]=oauthRequest('/oauth/authorize?'.http_build_query($params,'','&',PHP_QUERY_RFC3986));oauthCheck($status===200&&str_contains($html,'Sign in to connect'),'account sign-in displayed');
     preg_match('/name="csrf" value="([a-f0-9]+)"/',$html,$csrfMatch);$csrf=$csrfMatch[1]??'';
-    [$status,,$head,$html]=oauthRequest('/oauth/decision',['csrf'=>$csrf,'action'=>'login','email'=>$email,'password'=>$password]);oauthCheck($status===200&&str_contains($html,'Allow read access'),'consent displayed after sign-in');
+    [$status,,$head,$html]=oauthRequest('/oauth/decision',['csrf'=>$csrf,'action'=>'login','email'=>$email,'password'=>$password]);oauthCheck($status===200&&str_contains($html,'Allow requested access'),'consent displayed after sign-in');
     [$status,,$head]=oauthRequest('/oauth/decision',['csrf'=>$csrf,'action'=>'approve']);preg_match('/^Location:\s*(\S+)/mi',$head,$locationMatch);$location=$locationMatch[1]??'';parse_str(parse_url($location,PHP_URL_QUERY)?:'',$returned);
     oauthCheck($status===302&&str_starts_with($location,'http://127.0.0.1:4567/callback?')&&($returned['state']??'')==='roundtrip-test'&&($returned['iss']??'')==='http://127.0.0.1:8791','consent returns code to exact client redirect');
     $exchange=['grant_type'=>'authorization_code','client_id'=>$clientId,'code'=>$returned['code']??'','redirect_uri'=>'http://127.0.0.1:4567/callback','resource'=>'http://127.0.0.1:8791/mcp','code_verifier'=>$verifier];
@@ -37,17 +37,31 @@ try{
     [$status,$tokens]=oauthRequest('/oauth/token',$exchange);$access=$tokens['access_token']??'';$refresh=$tokens['refresh_token']??'';oauthCheck($status===200&&strlen($access)===64&&strlen($refresh)===64,'PKCE code exchange');
     [$status]=oauthRequest('/oauth/token',$exchange);oauthCheck($status===400,'authorization code cannot be replayed');
     [$status,$tools]=oauthRequest('/mcp',['jsonrpc'=>'2.0','id'=>1,'method'=>'tools/list','params'=>new stdClass()],'json');oauthCheck($status===200&&count($tools['result']['tools']??[])>=4,'MCP tool discovery');
+    $definitions=array_column($tools['result']['tools'],'inputSchema','name');
+    oauthCheck(isset($definitions['update_lead_phone'])&&in_array('provenance',$definitions['update_lead_phone']['required'],true),'MCP discovers field-specific profile edits with provenance');
+    $profileCall=['jsonrpc'=>'2.0','id'=>8,'method'=>'tools/call','params'=>['name'=>'update_lead_phone','arguments'=>['id'=>$lead,'version'=>1,'value'=>'0700000002','provenance'=>'Disposable test: user supplies an unverified proprietor candidate']]];
+    [$status]=oauthRequest('/mcp',$profileCall,'json',['Authorization: Bearer '.$access]);oauthCheck($status===403,'read-only grant cannot edit contact information');
+    $writeAccess=bin2hex(random_bytes(32));
+    query("INSERT INTO oauth_grants (id,client_id,user_id,workspace_id,resource,scope,access_hash,refresh_hash,access_expires_at,refresh_expires_at,auth_version) VALUES (?,?,?,?,?,?,?,?,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 1 HOUR),DATE_ADD(UTC_TIMESTAMP(),INTERVAL 1 DAY),1)",[uid(),$clientId,$user,$workspace,'http://127.0.0.1:8791/mcp','leads:read leads:write',hash('sha256',$writeAccess),hash('sha256',uid())]);
+    [$status,$edited]=oauthRequest('/mcp',$profileCall,'json',['Authorization: Bearer '.$writeAccess]);oauthCheck($status===200&&query('SELECT phone FROM leads WHERE id=?',[$lead])->fetchColumn()==='0700000002','OAuth MCP profile edit persists validated value');
+    [$status]=oauthRequest('/mcp',$profileCall,'json',['Authorization: Bearer '.$writeAccess]);oauthCheck($status===409,'OAuth MCP rejects stale contact edit');
     $call=['jsonrpc'=>'2.0','id'=>2,'method'=>'tools/call','params'=>['name'=>'list_leads','arguments'=>new stdClass()]];
-    [$status,,$head]=oauthRequest('/mcp',$call,'json');oauthCheck($status===401&&str_contains($head,'WWW-Authenticate: Bearer'),'unauthenticated tool call requests OAuth');
+    [$status,$challenge,$head]=oauthRequest('/mcp',$call,'json');oauthCheck($status===401&&str_contains($head,'WWW-Authenticate: Bearer')&&isset($challenge['result']['_meta']['mcp/www_authenticate']),'unauthenticated tool call requests OAuth');
     [$status,$found,$head]=oauthRequest('/mcp',$call,'json',['Authorization: Bearer '.$access]);$rows=json_decode($found['result']['content'][0]['text']??'null',true);
     oauthCheck($status===200&&count($rows??[])===1&&$rows[0]['id']===$lead,'authenticated MCP reads only connected workspace');
+    $writeCall=['jsonrpc'=>'2.0','id'=>3,'method'=>'tools/call','params'=>['name'=>'create_task','arguments'=>['lead_id'=>$lead,'title'=>'Test follow-up','due_at'=>'2030-01-01T12:00:00.000Z']]];
+    [$status,$denied,$head]=oauthRequest('/mcp',$writeCall,'json',['Authorization: Bearer '.$access]);
+    oauthCheck($status===403&&str_contains($denied['result']['_meta']['mcp/www_authenticate'][0]??'','insufficient_scope'),'read-only grant cannot write');
     oauthCheck(!str_contains(strtolower($head),'set-cookie:'),'MCP bearer calls do not create browser sessions');
     [$status,$renewed]=oauthRequest('/oauth/token',['grant_type'=>'refresh_token','client_id'=>$clientId,'refresh_token'=>$refresh,'resource'=>'http://127.0.0.1:8791/mcp']);$newAccess=$renewed['access_token']??'';oauthCheck($status===200&&strlen($newAccess)===64,'refresh token rotates access');
     [$status]=oauthRequest('/mcp',$call,'json',['Authorization: Bearer '.$access]);oauthCheck($status===401,'old access token revoked after refresh');
     [$status]=oauthRequest('/mcp',$call,'json',['Authorization: Bearer '.$newAccess]);oauthCheck($status===200,'new access token works');
+    query('UPDATE oauth_grants SET revoked_at=UTC_TIMESTAMP() WHERE access_hash=?',[hash('sha256',$newAccess)]);
+    [$status]=oauthRequest('/mcp',$call,'json',['Authorization: Bearer '.$newAccess]);oauthCheck($status===401,'revoked connection loses access');
     echo "Hosted OAuth and read-only MCP checks passed.\n";
 }finally{
     query('DELETE FROM oauth_grants WHERE workspace_id=?',[$workspace]);query('DELETE FROM oauth_codes WHERE workspace_id=?',[$workspace]);
+    foreach(['activities','opportunities','contacts','organisations'] as $table)query("DELETE FROM $table WHERE workspace_id=?",[$workspace]);
     query('DELETE FROM leads WHERE workspace_id=?',[$workspace]);query('DELETE FROM projects WHERE workspace_id=?',[$workspace]);query('DELETE FROM users WHERE workspace_id=?',[$workspace]);query('DELETE FROM workspaces WHERE id=?',[$workspace]);
     if($clientId)query('DELETE FROM oauth_clients WHERE id=?',[$clientId]);
 }

@@ -1,0 +1,22 @@
+import {cp, mkdir, rm, stat} from 'node:fs/promises';
+import {execFileSync} from 'node:child_process';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const publish = path.join(root, 'publish');
+const release = path.join(publish, 'reach');
+const staging = path.join(publish, 'upgrade-stage');
+const archive = path.join(publish, 'fieldwork-reach-upgrade.zip');
+await stat(path.join(release, 'public_html', 'index.html'));
+await stat(path.join(release, 'fieldwork', 'backend', 'migrate.php'));
+await rm(staging, {recursive: true, force: true});
+await rm(archive, {force: true});
+await mkdir(staging, {recursive: true});
+await cp(path.join(release, 'public_html'), path.join(staging, 'public_html'), {recursive: true});
+await cp(path.join(release, 'fieldwork'), path.join(staging, 'fieldwork'), {recursive: true});
+await cp(path.join(root, 'deploy', 'backup-database.php'), path.join(staging, 'backup-database.php'));
+await cp(path.join(root, 'deploy', 'install-upgrade.sh'), path.join(staging, 'install-upgrade.sh'));
+await cp(path.join(root, 'deploy', 'UPGRADE.txt'), path.join(staging, 'UPGRADE.txt'));
+execFileSync('tar', ['-a', '-cf', archive, '-C', staging, '.'], {stdio: 'inherit'});
+console.log(`Uploadable upgrade package: ${archive}`);

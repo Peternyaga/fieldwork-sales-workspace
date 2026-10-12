@@ -1,0 +1,29 @@
+{
+  "name": "sales-workspace-hosted",
+  "version": "0.4.0",
+  "description": "Manage hosted Fieldwork leads, provenance-backed profile corrections, and internal follow-ups through account-linked MCP.",
+  "author": {
+    "name": "Vumbua Labs"
+  },
+  "interface": {
+    "displayName": "Fieldwork Reach",
+    "shortDescription": "Manage leads and internal follow-ups in Fieldwork.",
+    "longDescription": "Connect your Fieldwork account to manage leads, correct eleven contact/profile fields with provenance and history, and process internal follow-up work.",
+    "developerName": "Vumbua Labs",
+    "category": "Productivity",
+    "capabilities": [
+      "Read leads",
+      "Edit lead profiles with provenance",
+      "Manage internal follow-ups"
+    ],
+    "websiteURL": "https://reach.vumbualabs.com",
+    "defaultPrompt": "Connect my Fieldwork account, then show my current follow-ups."
+  },
+  "mcpServers": "./.mcp.json",
+  "skills": "./skills/",
+  "extensions": {
+    "com.openai": {
+      "onboardingSkill": "./skills/setup/SKILL.md"
+    }
+  }
+}

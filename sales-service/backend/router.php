@@ -7,6 +7,8 @@ require __DIR__.'/projects.php';
 require __DIR__.'/intake.php';
 require __DIR__.'/accounts.php';
 require __DIR__.'/plugin.php';
+require __DIR__.'/agent-poll.php';
+require_once __DIR__.'/lead-profile.php';
 function cancelPendingLeadTasks(string $leadId,string $reason): int {
     $pending=query("SELECT id,title FROM tasks WHERE workspace_id=? AND lead_id=? AND status='pending' FOR UPDATE",[workspace(),$leadId])->fetchAll();
     foreach($pending as $task){
@@ -23,6 +25,7 @@ session_start();
 header('Content-Type: application/json; charset=utf-8');header('Cache-Control: no-store');header('X-Content-Type-Options: nosniff');
 try {
     $method=$_SERVER['REQUEST_METHOD'];
+    if(in_array($path,['/api/automation/ready','/api/automation/revoke-self','/api/automation/pair/start','/api/automation/pair/finish'],true))pollPublic($path,$method);
     if(!in_array($method,['GET','POST'],true)) fail('Method not allowed',405);
     if((int)($_SERVER['CONTENT_LENGTH']??0)>1048576) fail('Request too large',413);
     $data=$method==='POST'?json_decode(file_get_contents('php://input'),true,32,JSON_THROW_ON_ERROR):[];
@@ -77,6 +80,35 @@ try {
         if($path==='/api/logout'&&$method==='POST') {$_SESSION=[];session_destroy();$out=['ok'=>true];}
         elseif($path==='/api/plugin/connect'&&$method==='POST') {$out=connectLocalPlugin();}
         elseif($path==='/api/plugin/status'&&$method==='GET') {$out=localPluginStatus();}
+        elseif($path==='/api/oauth/connections'&&$method==='GET') {
+            $out=query('SELECT g.id,c.name,g.scope,g.created_at,g.access_expires_at,g.refresh_expires_at FROM oauth_grants g JOIN oauth_clients c ON c.id=g.client_id WHERE g.workspace_id=? AND g.user_id=? AND g.revoked_at IS NULL AND g.refresh_expires_at>UTC_TIMESTAMP() ORDER BY g.created_at DESC', [workspace(),$_SESSION['user_id']])->fetchAll();
+        }
+        elseif(preg_match('#^/api/automation/pair/([a-f0-9]{32})$#',$path,$pairMatch)&&$method==='GET') {
+            requireRole(['owner']);
+            $pair=query('SELECT id,device_name,approved_at,used_at,expires_at FROM agent_poll_pairings WHERE id=?',[$pairMatch[1]])->fetch();
+            if(!$pair||$pair['expires_at']<=gmdate('Y-m-d H:i:s')||$pair['used_at'])fail('Setup request expired',404);
+            $out=['id'=>$pair['id'],'device_name'=>$pair['device_name'],'approved'=>$pair['approved_at']!==null,'expires_at'=>$pair['expires_at']];
+        }
+        elseif(preg_match('#^/api/automation/pair/([a-f0-9]{32})/approve$#',$path,$pairMatch)&&$method==='POST') {
+            requireRole(['owner']);
+            $changed=query('UPDATE agent_poll_pairings SET workspace_id=?,user_id=?,approved_at=UTC_TIMESTAMP() WHERE id=? AND workspace_id IS NULL AND used_at IS NULL AND expires_at>UTC_TIMESTAMP()',[workspace(),$_SESSION['user_id'],$pairMatch[1]]);
+            if(!$changed->rowCount())fail('Setup request expired or already approved',409);
+            $out=['ok'=>true];
+        }
+        elseif($path==='/api/automation/pollers'&&$method==='GET') {
+            $out=query('SELECT id,created_at,last_used_at FROM agent_poll_tokens WHERE workspace_id=? AND user_id=? AND revoked_at IS NULL ORDER BY created_at DESC',[workspace(),$_SESSION['user_id']])->fetchAll();
+        }
+        elseif(preg_match('#^/api/automation/pollers/([a-f0-9]{32})/revoke$#',$path,$pollMatch)&&$method==='POST') {
+            requireRole(['owner']);
+            $changed=query('UPDATE agent_poll_tokens SET revoked_at=UTC_TIMESTAMP() WHERE id=? AND workspace_id=? AND user_id=? AND revoked_at IS NULL',[$pollMatch[1],workspace(),$_SESSION['user_id']]);
+            if(!$changed->rowCount())fail('Poller not found',404);
+            $out=['ok'=>true];
+        }
+        elseif(preg_match('#^/api/oauth/connections/([a-f0-9]{32})/revoke$#',$path,$connectionMatch)&&$method==='POST') {
+            $changed=query('UPDATE oauth_grants SET revoked_at=UTC_TIMESTAMP() WHERE id=? AND workspace_id=? AND user_id=? AND revoked_at IS NULL',[$connectionMatch[1],workspace(),$_SESSION['user_id']]);
+            if(!$changed->rowCount())fail('Connection not found',404);
+            $out=['ok'=>true];
+        }
         elseif($path==='/api/team/members'&&$method==='GET') {
             requireRole(['owner']);
             $out=query('SELECT id,name,email,role,active,setup_pending FROM users WHERE workspace_id=? ORDER BY name',[workspace()])->fetchAll();
@@ -163,7 +195,7 @@ try {
                 $results[]=['line'=>$row['line'],'status'=>isset($created['matches'])?'duplicate_existing':(isset($created['replayed'])?'already_imported':'imported'),'id'=>$created['id']??null];
             }
             $out=['rows'=>$results];
-        } elseif(preg_match('#^/api/leads/([a-f0-9]{32})(?:/(notes|update|close|tasks|assign|project|opportunities))?$#',$path,$match)) {
+        } elseif(preg_match('#^/api/leads/([a-f0-9]{32})(?:/(notes|update|close|tasks|assign|project|opportunities|profile))?$#',$path,$match)) {
             $id=$match[1];$lead=query('SELECT * FROM leads WHERE workspace_id=? AND id=?',[workspace(),$id])->fetch();if(!$lead) fail('Lead not found',404);
             $action=$match[2]??'';
             if(in_array($action,['assign','project'],true))requireRole(['owner','manager']);
@@ -174,6 +206,7 @@ try {
                     $out=['lead'=>array_intersect_key($lead,array_flip($public)),'activities'=>[],'tasks'=>[]];
                 }else $out=['lead'=>$lead,'activities'=>query('SELECT * FROM activities WHERE workspace_id=? AND lead_id=? ORDER BY created_at DESC,id DESC',[workspace(),$id])->fetchAll(),'tasks'=>query('SELECT * FROM tasks WHERE workspace_id=? AND lead_id=? ORDER BY due_at',[workspace(),$id])->fetchAll(),'opportunities'=>query('SELECT o.id,o.offering,o.stage,o.version FROM opportunities o JOIN contacts c ON c.id=o.contact_id AND c.workspace_id=o.workspace_id WHERE o.workspace_id=? AND c.source_lead_id=? ORDER BY o.created_at,o.id',[workspace(),$id])->fetchAll()];
             }
+            elseif($method==='POST'&&$action==='profile') {$out=editLeadProfile($id,$data);}
             elseif($method==='POST'&&$action==='project') {
                 $projectId=resolveProject(textField($data,'project_id',32,true),workspace());$version=$data['version']??null;
                 if(!is_int($version))fail('Invalid lead version');
@@ -268,6 +301,26 @@ try {
             $args=in_array(role(),['owner','manager'],true)?[workspace()]:[workspace(),$_SESSION['user_id']];
             $out=query("SELECT w.id,w.lead_id,w.kind,w.status,w.created_at,l.name,l.organisation,l.project_id,a.body AS source_note FROM agent_work_items w JOIN leads l ON l.id=w.lead_id AND l.workspace_id=w.workspace_id JOIN activities a ON a.id=w.source_activity_id WHERE w.workspace_id=? AND w.status='pending'$scope ORDER BY w.created_at,w.id LIMIT 50",$args)->fetchAll();
         }
+        elseif($path==='/api/agent-reports'&&$method==='GET') {
+            requireRole(['owner','manager','salesperson']);
+            $scope=in_array(role(),['owner','manager'],true)?'':' AND l.owner_user_id=?';
+            $params=in_array(role(),['owner','manager'],true)?[workspace()]:[workspace(),$_SESSION['user_id']];
+            $rows=query("SELECT w.id,w.kind,w.status,w.created_at,w.completed_at,w.result,w.parent_work_id,l.name,l.organisation,r.id AS reversal_id,r.status AS reversal_status,r.result AS reversal_result FROM agent_work_items w JOIN leads l ON l.id=w.lead_id AND l.workspace_id=w.workspace_id LEFT JOIN agent_work_items r ON r.parent_work_id=w.id AND r.workspace_id=w.workspace_id WHERE w.workspace_id=? AND w.kind<>'reverse_work'$scope ORDER BY w.created_at DESC,w.id DESC LIMIT 100",$params)->fetchAll();
+            $out=array_map(static function(array $row): array {$row['result']=$row['result']?json_decode($row['result'],true):null;$row['reversal_result']=$row['reversal_result']?json_decode($row['reversal_result'],true):null;return $row;},$rows);
+        }
+        elseif(preg_match('#^/api/agent-work/([a-f0-9]{32})/request-reversal$#',$path,$reverseMatch)&&$method==='POST') {
+            requireRole(['owner','manager','salesperson']);
+            $reason=textField($data,'reason',1000,true);
+            db()->beginTransaction();
+            $original=query('SELECT w.*,l.owner_user_id,l.collector_user_id FROM agent_work_items w JOIN leads l ON l.id=w.lead_id AND l.workspace_id=w.workspace_id WHERE w.workspace_id=? AND w.id=? FOR UPDATE',[workspace(),$reverseMatch[1]])->fetch();
+            if(!$original||!canAccessLead($original)||$original['kind']==='reverse_work')fail('Agent report not found',404);
+            if($original['status']!=='done')fail('Only completed agent work can be reviewed for reversal',409);
+            if(query('SELECT id FROM agent_work_items WHERE workspace_id=? AND parent_work_id=?',[workspace(),$original['id']])->fetch())fail('A reversal is already queued',409);
+            $activity=uid();$workId=uid();
+            query('INSERT INTO activities (id,workspace_id,lead_id,kind,body,actor) VALUES (?,?,?,?,?,?)',[$activity,workspace(),$original['lead_id'],'reversal_requested',json_encode(['original_work_id'=>$original['id'],'reason'=>$reason],JSON_THROW_ON_ERROR),$_SESSION['user_name']]);
+            query('INSERT INTO agent_work_items (id,workspace_id,lead_id,source_activity_id,parent_work_id,kind) VALUES (?,?,?,?,?,?)',[$workId,workspace(),$original['lead_id'],$activity,$original['id'],'reverse_work']);
+            db()->commit();$out=['ok'=>true,'work_id'=>$workId];
+        }
         elseif(preg_match('#^/api/agent-work/([a-f0-9]{32})/(schedule-call|resolve)$#',$path,$workMatch)&&$method==='POST') {
             requireRole(['owner','manager','salesperson']);
             db()->beginTransaction();
@@ -323,7 +376,7 @@ try {
     if(isset($db)&&$db->inTransaction()) $db->rollBack();
     // db() is cached; roll back an interrupted service transaction before returning.
     try{if(db()->inTransaction()) db()->rollBack();}catch(Throwable){}
-    $code=$e instanceof RuntimeException&&in_array($e->getCode(),[401,403,404,405,409,413,422],true)?$e->getCode():($e instanceof JsonException?422:500);
+    $code=$e instanceof RuntimeException&&in_array($e->getCode(),[401,403,404,405,409,413,422,429],true)?$e->getCode():($e instanceof JsonException?422:500);
     http_response_code($code);echo json_encode(['error'=>$code===500?'Service unavailable. Check server logs.':($e instanceof JsonException?'Invalid JSON':$e->getMessage())]);
     if($code===500) error_log($e->getMessage());
 }

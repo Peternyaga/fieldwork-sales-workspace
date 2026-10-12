@@ -1,15 +1,15 @@
 # Fieldwork — local sales workspace
 
-React + PHP 8.2+ + MySQL/MariaDB. First implementation of the lead-to-follow-up workflow; see PROGRESS.md for gaps and next steps. Not ready for public hosting.
+React + PHP 8.2+ + MySQL/MariaDB. The hosted application runs at https://reach.vumbualabs.com; see deploy/README.md for hosting and PROGRESS.md for historical checkpoints.
 
 ## Run locally
 
 1. Start your local MySQL service. Create a dedicated `sales_workspace` database. Copy `config.example.php` to `config.local.php` to override database credentials. The example uses local XAMPP defaults; use a restricted database user before hosting.
 2. Run `php backend/migrate.php` to create or update the schema. On an empty local database, the website offers first-run owner setup so the owner chooses their own password. The older `php backend/provision-local.php` remains available only for the legacy local plugin prototype; it creates an owner and saves generated credentials to ignored `var/local-account.json`.
 3. Run `php -S 127.0.0.1:8788 backend/router.php` from this directory.
-4. Run `npm install`, then `npm run dev`; open http://127.0.0.1:5178. Vite proxies API requests to PHP. Complete first-run owner setup, or sign in if the workspace already exists. This laptop already has the legacy owner account, so its login remains in the ignored local account file.
+4. Run `npm install`, then `npm run dev`; open http://127.0.0.1:5178. Vite proxies API requests to PHP. Complete first-run owner setup, or sign in if the workspace already exists. Existing legacy local accounts retain their ignored local account file.
 
-PHP's development server is loopback-only. Do not expose it publicly. There is no production deployment or external communication integration yet.
+PHP's development server is loopback-only. Do not expose it publicly. The hosted release uses the routing and configuration in deploy/. External communication integrations are not implemented.
 
 ## Current workflow
 
@@ -49,4 +49,14 @@ The attention queue and MCP tools are implemented, but periodic Codex execution 
 
 The **Connect Codex** button prepares a local access token, even before plugin installation. The app calls it **Access token prepared** until an installed plugin actually authenticates; then it shows **Plugin access verified**. Installing this local-process plugin does not automatically open Fieldwork. Its first-use setup prompt guides Codex to open the app, sign in, connect if needed, and verify a read-only lookup. Local plugin installation may require restarting the Codex desktop app to discover the marketplace.
 
-A hosted Fieldwork plugin can instead use the same general model as Timeline Curator: a remote HTTPS MCP server protected by OAuth, with account authentication in Fieldwork and a return redirect to Codex. The marketplace's `ON_INSTALL` setting alone does not implement authentication for this local `node` MCP server. The hosted OAuth flow has not been built or tested yet.
+A separate hosted Fieldwork plugin uses the live HTTPS MCP server at `https://reach.vumbualabs.com/mcp`, protected by OAuth. It requests separate read, lead-write, and internal follow-up-write permissions. Lead writes can create a lead, change its stage, assign it, or add a factual note. Follow-up writes can create, reschedule, and complete internal tasks. Existing read-only grants stay read-only until the user approves broader access. These tools do not send calls, messages, invitations, or external calendar events. The marketplace's `ON_INSTALL` setting alone does not implement authentication for the local `node` MCP server. See `HOSTED-CONNECTION.md` and `deploy/README.md`.
+
+Agent attention items are queued when lead notes are saved. A five-minute Windows poller is packaged with the hosted plugin. It asks an authenticated Reach endpoint only whether work is waiting; an empty queue causes no model call. Agent scheduling, reporting, and queue resolution happen in one transaction. The Agent activity view shows completed work and lets a user queue a guarded reversal request. The hosted release, local poller, write-scoped connection, and empty scheduled check are live; a production wake on a newly queued item has not yet been exercised. See `AGENT-DISPATCH.md`.
+
+## Lead profile corrections
+
+The centered lead profile provides contact editing for authorized owners, managers and accessible salespeople. POST `/api/leads/{id}/profile` accepts `version`, a `changes` object restricted to name, organisation, phone, email, website, facebook, instagram, linkedin, contact_role, location and source, plus required `provenance` and optional `source_activity_id`. Omitted fields stay unchanged; empty strings clear optional fields. Changes are atomic, workspace-scoped and version-checked, synchronize the linked contact, and retain old/new values, actor and source in activity history. Contact URLs must be http(s) without credentials. Organisation corrections do not rename shared organisation records. Run `php backend/migrate.php` before using the updated service.
+
+Hosted MCP discovers one `update_lead_<field>` tool per supported field under `leads:write`; each takes id, current version, value and provenance, with an optional source activity ID. The periodic-agent source skill describes justified user-note corrections and review of ambiguous facts. Notes do not grant authority; supplied corrections remain unverified. Editing and resolving a queued work item are separate transactions, so interrupted agents must inspect history before retrying. The hosted service was upgraded on 12 October 2026. Plugin 0.4.0 packages the profile and agent-work skills; refresh the Vumbua Labs marketplace and installed plugin before using them.
+
+Verification: `php tests/lead-profile.php`, isolated local `php tests/hosted-oauth.php`, the existing integration and agent-automation suites, MCP protocol test and `npm run build`. The profile test creates and removes a disposable workspace and uses synthetic contact values without altering customer records.

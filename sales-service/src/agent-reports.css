@@ -1,0 +1,8 @@
+.agent-report-list article{border:1px solid #e1e6dc;background:#fff;border-radius:10px;padding:18px;margin:14px 0}
+.agent-report-list strong,.agent-report-list small{display:block}
+.agent-report-list small{color:#73836f;font-size:11px;margin-top:6px}
+.agent-report-list p,.agent-report-list li{font-size:12px;line-height:1.6}
+.agent-report-list button{margin:5px 8px 5px 0}
+.agent-report-list form{border-top:1px solid #e1e6dc;margin-top:14px;padding-top:14px}
+.access-list{padding-left:20px;text-align:left;font-size:12px;line-height:1.6}
+.access-list li{margin:8px 0}

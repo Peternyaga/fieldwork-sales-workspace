@@ -1,0 +1,15 @@
+FIELDWORK REACH PRODUCTION UPGRADE
+
+Upload fieldwork-reach-upgrade.zip to:
+  /home/supashop/domains/reach.vumbualabs.com/
+
+Run this one line in the DirectAdmin terminal:
+  cd /home/supashop/domains/reach.vumbualabs.com && unzip -oq fieldwork-reach-upgrade.zip -d fieldwork-upgrade && bash fieldwork-upgrade/install-upgrade.sh
+
+This upgrades an existing installation only. It preserves fieldwork/config.local.php,
+backs up the database and application files, runs the migration, and updates the
+website. If backup prerequisites are missing, it stops before changing the site.
+
+After the command succeeds, open https://reach.vumbualabs.com/ and check a lead
+profile. Refresh the installed sales-workspace-hosted plugin separately; a server
+upload cannot update a cached plugin in Codex.

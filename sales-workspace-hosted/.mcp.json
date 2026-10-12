@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "fieldwork": {
+      "url": "https://reach.vumbualabs.com/mcp",
+      "auth": "oauth",
+      "required": false,
+      "scopes": ["leads:read", "leads:write", "tasks:write"]
+    }
+  }
+}
