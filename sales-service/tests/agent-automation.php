@@ -18,7 +18,7 @@ function agentApi(string $path,?array $body=null,?string $bearer=null): array {
     $head=substr($raw,0,$length);if(preg_match('/^Set-Cookie:\s*([^;\r\n]+)/mi',$head,$matches))$cookie=$matches[1];
     return [$status,json_decode(substr($raw,$length),true)];
 }
-$workspace=uid();$user=uid();$lead=uid();$email='agent-'.bin2hex(random_bytes(6)).'@local.test';$password=bin2hex(random_bytes(12));
+$workspace=uid();$otherWorkspace=uid();$user=uid();$lead=uid();$email='agent-'.bin2hex(random_bytes(6)).'@local.test';$password=bin2hex(random_bytes(12));
 try{
     query('INSERT INTO workspaces (id,name) VALUES (?,?)',[$workspace,'Agent automation test']);
     query('INSERT INTO users (id,workspace_id,name,email,password_hash,role) VALUES (?,?,?,?,?,?)',[$user,$workspace,'Test Owner',$email,password_hash($password,PASSWORD_DEFAULT),'owner']);
@@ -56,6 +56,48 @@ try{
     $changed=hostedWrite('reverse_agent_work',['id'=>$reversal2['work_id']]);
     agentCheck(($changed['status']??'')==='needs_review'&&query('SELECT status FROM tasks WHERE id=?',[$scheduled2['task_id']])->fetchColumn()==='pending','changed follow-up is left for human review');
     [$status,$empty]=agentApi('/automation/ready',null,$token);agentCheck($status===200&&$empty['ready']===false,'resolved queue returns to empty');
+    [$status,$reports]=agentApi('/agent-reports');
+    $reviewRow=array_values(array_filter($reports,fn($r)=>$r['id']===$reversal2['work_id']))[0]??[];
+    agentCheck($status===200&&isset($reviewRow['review_token'],$reviewRow['source_note'],$reviewRow['original_result']),'reversal review includes context and concurrency token');
+    $review=['action'=>'close','reason'=>'Keep the changed follow-up.','review_token'=>$reviewRow['review_token'],'request_id'=>bin2hex(random_bytes(16))];
+    $savedCsrf=$csrf;$csrf='invalid';
+    [$status]=agentApi('/agent-work/'.$reversal2['work_id'].'/review',$review);agentCheck($status===403,'review requires CSRF');$csrf=$savedCsrf;
+    [$status]=agentApi('/agent-work/'.uid().'/review',$review);agentCheck($status===404,'unknown work is inaccessible');
+    query('INSERT INTO workspaces (id,name) VALUES (?,?)',[$otherWorkspace,'Review isolation test']);
+    $otherEmail='other-'.$email;
+    query('INSERT INTO users (id,workspace_id,name,email,password_hash,role) VALUES (?,?,?,?,?,?)',[uid(),$otherWorkspace,'Other Owner',$otherEmail,password_hash($password,PASSWORD_DEFAULT),'owner']);
+    [$status]=agentApi('/login',['email'=>$otherEmail,'password'=>$password]);agentCheck($status===200,'other workspace owner signs in');
+    [$status]=agentApi('/agent-work/'.$reversal2['work_id'].'/review',$review);agentCheck($status===404,'known work in another workspace is inaccessible');
+    [$status]=agentApi('/login',['email'=>$email,'password'=>$password]);agentCheck($status===200,'original owner signs back in');
+    query("UPDATE users SET role='collector' WHERE id=?",[$user]);
+    [$status]=agentApi('/agent-work/'.$reversal2['work_id'].'/review',$review);agentCheck($status===403,'collector cannot review');
+    query("UPDATE users SET role='salesperson' WHERE id=?",[$user]);query('UPDATE leads SET owner_user_id=NULL WHERE id=?',[$lead]);
+    [$status]=agentApi('/agent-work/'.$reversal2['work_id'].'/review',$review);agentCheck($status===404,'unassigned salesperson cannot review');
+    query('UPDATE leads SET owner_user_id=? WHERE id=?',[$user,$lead]);
+    [$status]=agentApi('/agent-work/'.$reversal2['work_id'].'/review',$review+['unexpected'=>'no']);agentCheck($status===422,'extra fields rejected');
+    [$status]=agentApi('/agent-work/'.$reversal2['work_id'].'/review',array_replace($review,['review_token'=>str_repeat('0',64)]));agentCheck($status===409,'stale report rejected');
+    [$status]=agentApi('/agent-work/'.$reversal2['work_id'].'/review',array_replace($review,['reason'=>' ']));agentCheck($status===422,'review reason required');
+    [$status]=agentApi('/agent-work/'.$reversal2['work_id'].'/review',$review);agentCheck($status===200,'assigned salesperson closes reversal review');
+    [$status]=agentApi('/agent-work/'.$reversal2['work_id'].'/review',$review);agentCheck($status===200,'exact retry is idempotent');
+    [$status]=agentApi('/agent-work/'.$reversal2['work_id'].'/review',array_replace($review,['request_id'=>bin2hex(random_bytes(16))]));agentCheck($status===409,'competing review cannot overwrite decision');
+    $closed=json_decode(query('SELECT result FROM agent_work_items WHERE id=?',[$reversal2['work_id']])->fetchColumn(),true);
+    agentCheck($closed['summary']===$changed['summary']&&$closed['human_review']['actor']==='Test Owner','agent report and reviewer retained');
+    agentCheck(query('SELECT status FROM tasks WHERE id=?',[$scheduled2['task_id']])->fetchColumn()==='pending','review does not close follow-up task');
+    agentCheck((int)query("SELECT COUNT(*) FROM activities WHERE workspace_id=? AND kind='agent_work_reviewed'",[$workspace])->fetchColumn()===1,'retry creates one durable audit');
+    [$status,$empty]=agentApi('/automation/ready',null,$token);agentCheck($status===200&&$empty['ready']===false,'closed review is not polled again');
+    $activity3=uid();$work3=uid();
+    query('INSERT INTO activities (id,workspace_id,lead_id,kind,body,actor) VALUES (?,?,?,?,?,?)',[$activity3,$workspace,$lead,'note','{"text":"Uncertain callback"}','Test Owner']);
+    $report=json_encode(['summary'=>'Clarify callback time.','actions'=>[]]);
+    query("INSERT INTO agent_work_items (id,workspace_id,lead_id,source_activity_id,kind,status,result) VALUES (?,?,?,?,?,'needs_review',?)",[$work3,$workspace,$lead,$activity3,'review_note',$report]);
+    $correction=['action'=>'request_correction','reason'=>'Check current schedule for tomorrow at 10am Africa/Nairobi.','review_token'=>hash('sha256',$report),'request_id'=>bin2hex(random_bytes(16))];
+    [$status,$queued]=agentApi('/agent-work/'.$work3.'/review',$correction);agentCheck($status===200&&!empty($queued['next_work_id']),'correction queues separate work');
+    [$status,$again]=agentApi('/agent-work/'.$work3.'/review',$correction);agentCheck($status===200&&$again['next_work_id']===$queued['next_work_id'],'correction retry does not duplicate work');
+    [$status,$ready]=agentApi('/automation/ready',null,$token);agentCheck($status===200&&$ready['ready']===true,'explicit new work wakes poller');
+    $next=query('SELECT w.*,a.body FROM agent_work_items w JOIN activities a ON a.id=w.source_activity_id WHERE w.id=?',[$queued['next_work_id']])->fetch();
+    $context=json_decode($next['body'],true);agentCheck($next['status']==='pending'&&$context['reviewed_work_id']===$work3&&$context['agent_report']['summary']==='Clarify callback time.','new work retains context');
+    $_SESSION=['workspace_id'=>$workspace,'user_id'=>$user,'user_name'=>'Test Owner','user_role'=>'salesperson'];
+    try{hostedWrite('resolve_agent_work',['id'=>$work3,'decision'=>'done','reason'=>'Repeat']);agentCheck(false,'closed item cannot be reprocessed');}catch(RuntimeException $e){agentCheck($e->getCode()===409,'MCP refuses closed item');}
+    query("UPDATE users SET role='owner' WHERE id=?",[$user]);
     [$status]=agentApi('/automation/revoke-self',[],$token);agentCheck($status===200,'local uninstall can revoke polling credential');
     [$status]=agentApi('/automation/ready',null,$token);agentCheck($status===401,'revoked poller cannot check the queue');
 }finally{
@@ -70,5 +112,7 @@ try{
     query('DELETE FROM leads WHERE workspace_id=?',[$workspace]);
     query('DELETE FROM projects WHERE workspace_id=?',[$workspace]);
     query('DELETE FROM users WHERE workspace_id=?',[$workspace]);
+    query('DELETE FROM users WHERE workspace_id=?',[$otherWorkspace]);
     query('DELETE FROM workspaces WHERE id=?',[$workspace]);
+    query('DELETE FROM workspaces WHERE id=?',[$otherWorkspace]);
 }

@@ -6,3 +6,11 @@
 .agent-report-list form{border-top:1px solid #e1e6dc;margin-top:14px;padding-top:14px}
 .access-list{padding-left:20px;text-align:left;font-size:12px;line-height:1.6}
 .access-list li{margin:8px 0}
+.agent-report-list .review-needed{border-color:#9b7024;background:#fffcf3}
+.agent-context{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;background:#f5f7f2;padding:12px;border-radius:6px}
+.agent-report-list details{margin:12px 0;font-size:13px}
+.agent-report-list summary{cursor:pointer;min-height:44px;display:flex;align-items:center}
+.agent-report-list .agent-lead{text-align:left;overflow-wrap:anywhere;font-size:15px;min-height:44px}
+.agent-review-actions{display:flex;flex-wrap:wrap;gap:6px}
+.agent-review-decision{border-left:3px solid #73836f;padding-left:12px}
+@media(max-width:600px){.agent-review-actions button,.agent-report-list form button{width:100%;min-height:44px}.agent-report-list article{padding:12px}.agent-report-list textarea{width:100%;box-sizing:border-box}}

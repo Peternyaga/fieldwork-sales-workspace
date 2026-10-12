@@ -9,6 +9,7 @@ require __DIR__.'/accounts.php';
 require __DIR__.'/plugin.php';
 require __DIR__.'/agent-poll.php';
 require_once __DIR__.'/lead-profile.php';
+require_once __DIR__.'/agent-review.php';
 function cancelPendingLeadTasks(string $leadId,string $reason): int {
     $pending=query("SELECT id,title FROM tasks WHERE workspace_id=? AND lead_id=? AND status='pending' FOR UPDATE",[workspace(),$leadId])->fetchAll();
     foreach($pending as $task){
@@ -305,8 +306,11 @@ try {
             requireRole(['owner','manager','salesperson']);
             $scope=in_array(role(),['owner','manager'],true)?'':' AND l.owner_user_id=?';
             $params=in_array(role(),['owner','manager'],true)?[workspace()]:[workspace(),$_SESSION['user_id']];
-            $rows=query("SELECT w.id,w.kind,w.status,w.created_at,w.completed_at,w.result,w.parent_work_id,l.name,l.organisation,r.id AS reversal_id,r.status AS reversal_status,r.result AS reversal_result FROM agent_work_items w JOIN leads l ON l.id=w.lead_id AND l.workspace_id=w.workspace_id LEFT JOIN agent_work_items r ON r.parent_work_id=w.id AND r.workspace_id=w.workspace_id WHERE w.workspace_id=? AND w.kind<>'reverse_work'$scope ORDER BY w.created_at DESC,w.id DESC LIMIT 100",$params)->fetchAll();
-            $out=array_map(static function(array $row): array {$row['result']=$row['result']?json_decode($row['result'],true):null;$row['reversal_result']=$row['reversal_result']?json_decode($row['reversal_result'],true):null;return $row;},$rows);
+            $rows=query("SELECT w.id,w.lead_id,w.kind,w.status,w.created_at,w.completed_at,w.result,w.parent_work_id,l.name,l.organisation,a.body AS source_note,p.result AS original_result,r.id AS reversal_id,r.status AS reversal_status FROM agent_work_items w JOIN leads l ON l.id=w.lead_id AND l.workspace_id=w.workspace_id JOIN activities a ON a.id=w.source_activity_id AND a.workspace_id=w.workspace_id LEFT JOIN agent_work_items p ON p.id=w.parent_work_id AND p.workspace_id=w.workspace_id LEFT JOIN agent_work_items r ON r.parent_work_id=w.id AND r.workspace_id=w.workspace_id WHERE w.workspace_id=?$scope ORDER BY CASE WHEN w.status='needs_review' THEN 0 WHEN w.status='pending' THEN 1 ELSE 2 END,w.created_at DESC,w.id DESC LIMIT 100",$params)->fetchAll();
+            $out=array_map(static function(array $row): array {$row['review_token']=hash('sha256',$row['result']??'');foreach(['result','source_note','original_result'] as $key)$row[$key]=$row[$key]?json_decode($row[$key],true):null;return $row;},$rows);
+        }
+        elseif(preg_match('#^/api/agent-work/([a-f0-9]{32})/review$#',$path,$reviewMatch)&&$method==='POST') {
+            $out=reviewAgentWork($reviewMatch[1],$data);
         }
         elseif(preg_match('#^/api/agent-work/([a-f0-9]{32})/request-reversal$#',$path,$reverseMatch)&&$method==='POST') {
             requireRole(['owner','manager','salesperson']);
